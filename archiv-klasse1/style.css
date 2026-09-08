@@ -1,0 +1,687 @@
+/* ============================================
+   CSS Variables - Farben für Module
+   ============================================ */
+:root {
+    /* Farben für Modul 1 */
+    --color-modul1: #66BB6A;
+    --color-modul1-light: #A5D6A7;
+    
+    /* Farben für Modul 2 */
+    --color-modul2: #42A5F5;
+    --color-modul2-light: #90CAF9;
+    
+    /* Farben für Modul 3 */
+    --color-modul3: #FF9800;
+    --color-modul3-light: #FFCC80;
+
+    /* Farben für Modul 4 */
+    --color-modul4: #9C27B0;
+    --color-modul4-light: #E1BEE7;
+
+    --color-text: #333;
+    --color-bg: #f5f5f5;
+    --color-white: #ffffff;
+    --shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    --shadow-hover: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* ============================================
+   Basis-Styles & Reset
+   ============================================ */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Outfit', 'Comic Sans MS', cursive, sans-serif;
+    color: var(--color-text);
+    overflow-x: hidden;
+}
+
+/* Globaler Hintergrund */
+.background-placeholder {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url('background.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.85;
+    z-index: -1;
+}
+
+/* ============================================
+   Screen-Management (SPA Logik)
+   ============================================ */
+.screen {
+    display: none;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+/* Nur Bildschirme mit der Klasse .active werden angezeigt */
+.screen.active {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Zentrierter Container für Inhalte */
+.content {
+    position: relative;
+    z-index: 1;
+    max-width: 900px;
+    width: 100%;
+}
+
+.main-title {
+    font-size: 3rem;
+    font-weight: 700;
+    color: var(--color-white);
+    text-align: center;
+    margin-bottom: 60px;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================
+   Buttons (Hauptmenü & Auswahl)
+   ============================================ */
+.button-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 30px;
+    padding: 20px;
+}
+
+.operation-btn {
+    min-height: 180px;
+    border: none;
+    border-radius: 25px;
+    font-size: 1.4rem;
+    font-weight: 600;
+    font-family: 'Outfit', sans-serif;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    color: var(--color-white);
+}
+
+/* Spezifische Button-Farben */
+.operation-btn.modul1 { background: linear-gradient(135deg, var(--color-modul1) 0%, var(--color-modul1-light) 100%); }
+.operation-btn.modul2 { background: linear-gradient(135deg, var(--color-modul2) 0%, var(--color-modul2-light) 100%); }
+.operation-btn.modul3 { background: linear-gradient(135deg, var(--color-modul3) 0%, var(--color-modul3-light) 100%); }
+.operation-btn.modul4 { background: linear-gradient(135deg, var(--color-modul4) 0%, var(--color-modul4-light) 100%); }
+
+.operation-btn .emoji { font-size: 3.5rem; }
+.operation-btn:hover { transform: translateY(-5px) scale(1.05); box-shadow: var(--shadow-hover); }
+
+/* ============================================
+   Übungs-Screens & Layouts
+   ============================================ */
+.exercise-screen .content {
+    background: var(--color-white);
+    border-radius: 20px;
+    padding: 40px;
+    box-shadow: var(--shadow);
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.back-btn {
+    background: #757575;
+    color: var(--color-white);
+    border: none;
+    padding: 12px 24px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.back-btn:hover { background: #616161; transform: translateY(-2px); }
+
+.exercise-title {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+    text-align: center;
+}
+.modul1-color { color: var(--color-modul1); }
+.description { font-size: 1.1rem; color: #666; text-align: center; margin-bottom: 30px; }
+
+/* ============================================
+   Aufgabenbereich & Interaktion
+   ============================================ */
+.task-area {
+    background: #fafafa;
+    border: 3px solid #e0e0e0;
+    border-radius: 15px;
+    padding: 30px;
+    margin-bottom: 25px;
+}
+
+.button-area {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-top: 30px;
+}
+
+.check-btn, .next-btn {
+    padding: 15px 40px;
+    font-size: 1.3rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    color: #ffffff !important;
+    box-shadow: var(--shadow);
+    transition: all 0.3s ease;
+}
+
+.check-btn.modul1-color, .next-btn.modul1-color {
+    background: var(--color-modul1);
+}
+.check-btn.modul3-color, .next-btn.modul3-color {
+    background: var(--color-modul3);
+}
+.check-btn.modul4-color, .next-btn.modul4-color {
+    background: var(--color-modul4);
+}
+
+.check-btn:hover, .next-btn:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); }
+
+/* Feedback Area */
+.feedback-area {
+    min-height: 60px;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 8px;
+    text-align: center;
+}
+.feedback-area.correct { background: #c8e6c9; border-left: 5px solid #2e7d32; color: #1b5e20; }
+.feedback-area.wrong { background: #ffcdd2; border-left: 5px solid #c62828; color: #b71c1c; }
+
+/* ============================================
+   Responsive Design (Tablets & Handys)
+   ============================================ */
+@media (max-width: 768px) {
+    .main-title { font-size: 2rem; margin-bottom: 40px; }
+    .exercise-screen .content { padding: 25px; }
+    .button-area { flex-direction: column; }
+    .check-btn, .next-btn { width: 100%; }
+}
+
+/* ============================================
+   Modul 1: Simultane Erfassung Styles
+   ============================================ */
+.task-visual-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200px;
+    padding: 10px;
+    width: 100%;
+}
+
+.dice-container {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+}
+
+.dice {
+    width: 100px;
+    height: 100px;
+    background-color: var(--color-white);
+    border-radius: 15px;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.1), 0 5px 15px rgba(0,0,0,0.2);
+    padding: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Hände-Container */
+.hands-container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 25px;
+    flex-wrap: wrap;
+}
+
+.hand-card {
+    background: rgba(255, 255, 255, 0.92);
+    border-radius: 20px;
+    padding: 12px 16px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border: 3px solid #eef2f7;
+    transition: transform 0.2s ease;
+}
+
+.hand-card:hover {
+    transform: translateY(-3px);
+}
+
+.hand-svg {
+    width: 160px;
+    height: 215px;
+    display: block;
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.06));
+}
+
+.hand-label {
+    margin-top: 6px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #576574;
+}
+
+/* Zehnerstreifen / Punktebilder */
+.ten-frame-container {
+    background: #ffffff;
+    border-radius: 24px;
+    padding: 18px 24px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+    border: 3px solid #eef2f7;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 100%;
+}
+
+.ten-frame-bar {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 0;
+}
+
+/* Führungsschiene / Draht hinter den Kugeln */
+.ten-frame-bar::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 8px;
+    right: 8px;
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    transform: translateY(-50%);
+    z-index: 0;
+}
+
+.bead-group {
+    display: flex;
+    gap: 12px;
+    position: relative;
+    z-index: 1;
+}
+
+.bead-gap {
+    width: 32px;
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bead-gap::after {
+    content: '';
+    width: 4px;
+    height: 32px;
+    background: #cbd5e1;
+    border-radius: 2px;
+}
+
+.bead {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
+    position: relative;
+}
+
+.bead.active-red {
+    background: radial-gradient(circle at 35% 32%, #ff7675 0%, #d63031 65%, #b71540 100%);
+    box-shadow: 0 6px 12px rgba(214, 48, 49, 0.35), inset -2px -2px 4px rgba(0, 0, 0, 0.2), inset 2px 2px 4px rgba(255, 255, 255, 0.5);
+    border: 2px solid #c0392b;
+}
+
+.bead.active-blue {
+    background: radial-gradient(circle at 35% 32%, #74b9ff 0%, #0984e3 65%, #0a3d62 100%);
+    box-shadow: 0 6px 12px rgba(9, 132, 227, 0.35), inset -2px -2px 4px rgba(0, 0, 0, 0.2), inset 2px 2px 4px rgba(255, 255, 255, 0.5);
+    border: 2px solid #2980b9;
+}
+
+.bead.empty {
+    background: #f8f9fa;
+    border: 3px dashed #cbd5e1;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+.option-btn {
+    min-width: 65px;
+    height: 65px;
+    font-size: 2.2rem;
+    font-weight: bold;
+    border: none;
+    background-color: var(--color-modul2-light);
+    color: var(--color-text);
+    border-radius: 18px;
+    cursor: pointer;
+    box-shadow: 0 5px 0 var(--color-modul2);
+    transition: transform 0.1s, box-shadow 0.1s, background-color 0.2s;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+}
+
+#modul1OptionsArea .option-btn {
+    background-color: var(--color-modul1-light);
+    box-shadow: 0 5px 0 var(--color-modul1);
+    min-width: 60px;
+    height: 64px;
+    font-size: 2rem;
+}
+
+.option-btn:active:not(:disabled) {
+    transform: translateY(5px);
+    box-shadow: 0 0 0 var(--color-modul2);
+}
+
+#modul1OptionsArea .option-btn:active:not(:disabled) {
+    box-shadow: 0 0 0 var(--color-modul1);
+}
+
+.kopfrechnen-task-area {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 180px;
+}
+
+.kopfrechnen-task {
+    color: var(--color-modul1);
+    font-size: clamp(2.8rem, 8vw, 5rem);
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.kopfrechnen-options {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.kopfrechnen-options .option-btn {
+    background-color: var(--color-modul1-light);
+    box-shadow: 0 5px 0 var(--color-modul1);
+}
+
+.kopfrechnen-options .option-btn:active:not(:disabled) {
+    box-shadow: 0 0 0 var(--color-modul1);
+}
+
+.option-btn:disabled {
+    opacity: 0.8;
+    cursor: not-allowed;
+}
+
+.modul2-color { color: var(--color-modul2); }
+
+.croc-btn {
+    width: 160px;
+    height: 120px;
+    padding: 10px;
+}
+
+/* ============================================
+   Würfel Animation
+   ============================================ */
+@keyframes roll-dice {
+    0% { transform: translateY(0) rotate(0deg) scale(1); }
+    25% { transform: translateY(-30px) rotate(90deg) scale(1.1); }
+    50% { transform: translateY(0) rotate(180deg) scale(1); }
+    75% { transform: translateY(-15px) rotate(270deg) scale(1.05); }
+    100% { transform: translateY(0) rotate(360deg) scale(1); }
+}
+
+.dice.rolling {
+    animation: roll-dice 0.6s ease-in-out;
+}
+
+/* ============================================
+   Modul 3: Schüttelbox Styles
+   ============================================ */
+.modul3-color { color: var(--color-modul3); }
+
+.shake-box-container {
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    width: 340px;
+    height: 180px;
+    margin: 0 auto;
+    border: 8px solid #8D6E63;
+    border-radius: 12px;
+    background: #EFEBE9;
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 0 15px rgba(0,0,0,0.2), 0 5px 15px rgba(0,0,0,0.1);
+}
+
+.shake-box-half {
+    width: 50%;
+    position: relative;
+    padding: 10px;
+}
+
+.shake-box-half.left {
+    border-right: 4px solid #8D6E63;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.shake-box-half.right {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #D7CCC8;
+}
+
+.shake-cover {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #9E9E9E;
+    color: #FFF;
+    font-size: 5rem;
+    font-weight: bold;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+    z-index: 10;
+    border-left: 2px solid #757575;
+}
+
+/* Grids und Kugeln */
+.kugeln-grid {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: center;
+    justify-content: center;
+    gap: 8px;
+    height: 100%;
+    width: 100%;
+    /* Spezifisches Grid je nach Kugelanzahl wird per Inline-STyle gesetzt oder flexbox zentriert */
+}
+
+.kugel {
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #FF5252, #B71C1C);
+    box-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+/* Animation */
+@keyframes shake-box-anim {
+    0% { transform: translateX(0) scale(1); }
+    10% { transform: translateX(-15px) rotate(-3deg) scale(1.05); }
+    20% { transform: translateX(15px) rotate(3deg) scale(1.05); }
+    30% { transform: translateX(-15px) rotate(-3deg) scale(1.05); }
+    40% { transform: translateX(15px) rotate(3deg) scale(1.05); }
+    50% { transform: translateX(-15px) rotate(-3deg) scale(1.05); }
+    60% { transform: translateX(15px) rotate(3deg) scale(1.05); }
+    70% { transform: translateX(-15px) rotate(-3deg) scale(1.05); }
+    80% { transform: translateX(15px) rotate(3deg) scale(1.05); }
+    90% { transform: translateX(-15px) rotate(-3deg) scale(1.05); }
+    100% { transform: translateX(0) rotate(0deg) scale(1); }
+}
+
+.shake-box-container.shaking {
+    animation: shake-box-anim 0.8s ease-in-out;
+}
+
+/* ============================================
+   Modul 4: Immer 10 Styles
+   ============================================ */
+.modul4-color { color: var(--color-modul4); }
+
+/* Tabs */
+.tabs-container .tab {
+    padding: 8px 15px;
+    border-radius: 8px;
+    background: #E0E0E0;
+    transition: all 0.3s ease;
+}
+.tabs-container .tab.active {
+    background: #FFF;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+.tabs-container .tab.locked {
+    background: #EEEEEE;
+}
+
+/* Modul 4 Heart Dropzone & Draggable */
+.m4s2-heart-container {
+    display: flex;
+    width: 90px;
+    height: 90px;
+    position: relative;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));
+}
+
+.m4s2-heart-half {
+    width: 50%;
+    height: 100%;
+    position: relative;
+}
+
+.m4s2-heart-left {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 50 100'><path d='M50 95 C0 60 0 10 25 5 C40 2 50 20 50 30 Z' fill='%23F48FB1'/></svg>");
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-color: transparent !important;
+    border-radius: 0 !important;
+    border-right: none !important;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-size: 2.5rem;
+    font-weight: bold;
+    z-index: 2;
+    padding-right: 5px;
+}
+
+.m4s2-heart-right-placeholder {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 50 100'><path d='M0 30 C0 20 10 2 25 5 C50 10 50 60 0 95 Z' fill='rgba(0,0,0,0.03)' stroke='%23BDBDBD' stroke-width='2' stroke-dasharray='4,4'/></svg>");
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-color: transparent !important;
+    border-radius: 0 !important;
+    border: none !important;
+    z-index: 1;
+}
+
+.m4s2-draggable-heart {
+    width: 45px;
+    height: 90px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 50 100'><path d='M0 30 C0 20 10 2 25 5 C50 10 50 60 0 95 Z' fill='%23F06292'/></svg>");
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-color: transparent !important;
+    border-radius: 0 !important;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-size: 2.5rem;
+    font-weight: bold;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+    box-shadow: none !important;
+    filter: drop-shadow(3px 0 6px rgba(0,0,0,0.15));
+    z-index: 10;
+    padding-left: 5px;
+}
+.m4s2-draggable-heart:active {
+    cursor: grabbing;
+    transform: scale(1.1);
+}
+
+/* Modul 4 Heart Success */
+.m4s2-heart-container.success .m4s2-heart-left {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 50 100'><path d='M50 95 C0 60 0 10 25 5 C40 2 50 20 50 30 Z' fill='%234CAF50'/></svg>");
+}
+.m4s2-heart-container.success .m4s2-draggable-heart {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 50 100'><path d='M0 30 C0 20 10 2 25 5 C50 10 50 60 0 95 Z' fill='%234CAF50'/></svg>");
+    filter: drop-shadow(0 0 10px rgba(76, 175, 80, 0.5));
+}
+
+/* Star glowing */
+@keyframes star-glow {
+    0% { color: #ccc; text-shadow: 1px 1px 3px rgba(0,0,0,0.2); transform: scale(1); }
+    50% { color: gold; text-shadow: 0 0 20px rgba(255,215,0,1); transform: scale(1.3); }
+    100% { color: gold; text-shadow: 0 0 10px rgba(255,215,0,0.8); transform: scale(1); }
+}
+
+.star-earned {
+    animation: star-glow 0.8s ease-out forwards;
+}
