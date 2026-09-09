@@ -971,9 +971,6 @@ let s5Fehlversuche = 0;
    (Firefox) ist oben schon ausgenommen. */
 const S5_MAX_FEHLVERSUCHE = 2;
 
-/* Ergebnis des stummen Probelaufs: null = noch offen, 'ok' oder 'defekt' */
-let s5SpracheGeprueft = null;
-
 /* Steht überall dort, wo das Zahlwort geschrieben statt gesprochen wird */
 const S5_HINWEIS = 'Dieser Browser liest nicht vor – die Zahl steht als Wort da. '
                  + 'Mit Chrome oder Edge geöffnet wird sie vorgelesen.';
@@ -984,8 +981,13 @@ const S5_HINWEIS = 'Dieser Browser liest nicht vor – die Zahl steht als Wort d
    beendet, gilt sie als gescheitert. Das längste Zahlwort dauert auch
    langsam gesprochen keine zwei Sekunden. */
 let s5Watchdog = null;
-let s5AnsageLaeuft = false;
 const S5_WACHFRIST = 6000;
+
+/* Die zuletzt abgeschickte Ansage. Meldet sie bis zur nächsten weder
+   Beginn noch Ende noch Fehler, hat die Sprachausgabe sie verschluckt.
+   Der Wachhund allein genügt dafür nicht: Bei jedem Aufgabenwechsel
+   wird er entschärft, und eine hängende Sprachausgabe meldet nie. */
+let s5LetzteAnsage = null;
 
 /* Die Stimmenliste einmal holen statt bei jeder Ansage. */
 let s5Stimmen = null;
@@ -1015,42 +1017,17 @@ function zahlwortDE(zahl) {
 }
 
 /* ---- Sprachausgabe ---------------------------------------------- */
-/* Die Sprachausgabe ist der empfindlichste Teil der App. Sie fehlt auf
-   manchen Geräten, wirft auf anderen – und in Firefox unter Windows
-   bleibt sie nach dem ersten speak() dauerhaft im Zustand "spricht"
-   stehen: onend kommt nie, der Browser lässt sich am Ende nicht mehr
-   schließen und wird zunehmend zäh. Darum gelten hier drei Regeln:
+/* Die Sprachausgabe ist der empfindlichste Teil der App: Auf manchen
+   Geräten fehlt sie, auf anderen wirft sie oder bleibt hängen. Darum
+   ist hier jeder Zugriff abgesichert, und wenn zwei Ansagen hinter-
+   einander nicht zu Ende kommen, tritt das geschriebene Zahlwort an
+   die Stelle des Lautsprecher-Knopfs. Die Aufgabe bleibt so in jedem
+   Fall lösbar.
 
-     1. Ohne Stimme wird nicht gesprochen.
-     2. Es läuft immer nur eine Ansage. Solange die vorige nicht beendet
-        ist, wird keine neue nachgelegt.
-     3. Endet eine Ansage nicht in der Wachfrist, gilt die Sprachausgabe
-        als kaputt – ab dann steht das Zahlwort geschrieben da.
-
-   So kann das Modul den Browser nicht mehr verklemmen, und die Aufgabe
-   bleibt in jedem Fall lösbar. */
-/* Firefox unter Windows kann das Vorlesen nicht: Es beginnt eine Ansage,
-   meldet nie ihr Ende, und die Sprachausgabe bleibt danach dauerhaft im
-   Zustand "spricht" stehen. Der Browser wird zäh und lässt sich nicht
-   mehr sauber schließen – nachgemessen: ein einziger speak()-Aufruf
-   genügt dafür. Vorher zuverlässig erkennen lässt sich das nicht, denn
-   der Versuch selbst ist bereits der Schaden.
-
-   Darum die einzige Stelle in dieser App, an der nach dem Browser
-   gefragt wird: In Firefox wird nicht gesprochen, sondern das Zahlwort
-   geschrieben. Das Modul bleibt damit vollständig benutzbar; ein
-   Hinweis nennt Chrome und Edge für die Hörfassung. */
-function browserKannSprechen() {
-    try {
-        return !/firefox|fxios/i.test(navigator.userAgent || '');
-    } catch (e) {
-        return true;
-    }
-}
-
+   Ein Wachhund misst dabei die Zeit, statt sich auf onerror zu
+   verlassen: Eine hängende Sprachausgabe meldet gar nichts mehr. */
 function spracheVerfuegbar() {
     if (s5SpracheDefekt) return false;
-    if (!browserKannSprechen()) return false;
     try {
         return typeof window.speechSynthesis !== 'undefined' &&
                window.speechSynthesis !== null &&
@@ -1093,7 +1070,6 @@ function deutscheStimme() {
 /* Eine Ansage ist fehlgeschlagen. Beim zweiten Mal hintereinander gilt:
    dieses Gerät spricht nicht. */
 function ansageGescheitert() {
-    s5AnsageLaeuft = false;
     s5Fehlversuche++;
     if (s5Fehlversuche >= S5_MAX_FEHLVERSUCHE) spracheAufgeben();
 }
@@ -1159,30 +1135,16 @@ function sprichZahl(zahl, langsam) {
 function ansageStarten(zahl, langsam) {
     if (!spracheVerfuegbar()) return;
 
-    // Hat der Probelauf gezeigt, dass dieser Browser nicht zu Ende
-    // spricht, wird gar nicht erst angesetzt.
-    if (s5SpracheGeprueft === 'defekt') {
-        spracheAufgeben();
-        return;
-    }
-
-    // Regel 1: ohne Stimme wird nicht gesprochen. Die Liste kommt
-    // manchmal verspätet – erst nachfassen, dann aufgeben.
+    // Steht die Stimmenliste noch nicht bereit, wird trotzdem gesprochen –
+    // dann eben mit der Standardstimme des Browsers.
     if (!s5Stimmen || !s5Stimmen.length) stimmenLaden();
-    if (!s5Stimmen || !s5Stimmen.length) {
-        spracheAufgeben();
-        return;
-    }
 
-    // Regel 2: nur eine Ansage auf einmal. Hängt die vorige noch, wird
-    // nichts nachgelegt – sonst wächst eine Warteschlange, die sich
-    // nie leert.
-    try {
-        if (s5AnsageLaeuft || window.speechSynthesis.pending) {
-            ansageGescheitert();
-            return;
-        }
-    } catch (e) { /* Zustand nicht lesbar: trotzdem versuchen */ }
+    // Hat die vorige Ansage sich nie gerührt, war sie ein Fehlversuch.
+    if (s5LetzteAnsage && !s5LetzteAnsage.gemeldet) {
+        s5LetzteAnsage = null;
+        ansageGescheitert();
+        if (!spracheVerfuegbar()) return;
+    }
 
     try {
         // Nach einem Tabwechsel steht die Sprachausgabe pausiert da und
@@ -1195,24 +1157,28 @@ function ansageStarten(zahl, langsam) {
         const stimme = deutscheStimme();
         if (stimme) text.voice = stimme;
 
+        // Jede Rückmeldung zählt: Die Sprachausgabe lebt.
+        text.gemeldet = false;
+        text.onstart = () => { text.gemeldet = true; };
+
         // Eine sauber beendete Ansage ist der Beweis, dass es geht.
         text.onend = () => {
+            text.gemeldet = true;
             watchdogStoppen();
-            s5AnsageLaeuft = false;
             s5Fehlversuche = 0;
         };
 
         // 'interrupted' und 'canceled' sind unsere eigenen Abbrüche –
         // die zählen nicht als Fehler.
         text.onerror = (ereignis) => {
+            text.gemeldet = true;
             watchdogStoppen();
             const grund = ereignis && ereignis.error;
-            if (grund === 'interrupted' || grund === 'canceled') s5AnsageLaeuft = false;
-            else ansageGescheitert();
+            if (grund !== 'interrupted' && grund !== 'canceled') ansageGescheitert();
         };
 
         s5Ansage = text;   // Referenz halten, sonst räumt Chrome sie weg
-        s5AnsageLaeuft = true;
+        s5LetzteAnsage = text;
         window.speechSynthesis.speak(text);
 
         // Regel 3: Kommt kein Ende, ist die Sprachausgabe kaputt.
@@ -1501,62 +1467,25 @@ try {
     }
 } catch (e) { /* ohne vorgewärmte Stimmenliste weiter */ }
 
-/* Stummer Probelauf beim allerersten Antippen – er leistet zweierlei:
+/* Tablets sprechen nur, wenn die Sprachausgabe einmal während einer
+   Berührung begonnen hat. Unsere Ansagen kommen aber aus einem Timer –
+   darum beim ersten Antippen einmal lautlos sprechen und so freischalten.
+   In Firefox nachgemessen: Diese leere Ansage endet nach gut 100 ms und
+   stört die folgenden nicht. */
+let s5Freigeschaltet = false;
 
-   1. Er schaltet die Sprachausgabe frei. Tablets sprechen nur, wenn
-      einmal während einer Berührung begonnen wurde; unsere Ansagen
-      kommen aber aus einem Timer.
-   2. Er prüft, ob dieser Browser eine Ansage überhaupt zu Ende bringt.
-      Firefox unter Windows fängt an und meldet nie ein Ende – danach
-      hängt seine Sprachausgabe fest. Diesen einen Versuch verlegen wir
-      deshalb an eine harmlose Stelle: auf den Startbildschirm, lange
-      bevor ein Kind in der Station sitzt. Geht er schief, läuft das
-      Modul von Anfang an mit geschriebenen Zahlwörtern.
-
-   Gesprochen wird dabei nichts: Lautstärke null. */
-let s5Probelauf = false;
-const S5_PROBEFRIST = 2500;
-
-function spracheProbieren() {
-    if (s5Probelauf || !spracheVerfuegbar()) return;
-
-    // Ohne Stimme gibt es nichts zu prüfen. Die Liste kommt manchmal
-    // verspätet, darum bleibt der Lauscher so lange bestehen.
-    if (!s5Stimmen || !s5Stimmen.length) stimmenLaden();
-    if (!s5Stimmen || !s5Stimmen.length) return;
-
-    s5Probelauf = true;
-    document.removeEventListener('pointerdown', spracheProbieren);
-    document.removeEventListener('touchstart', spracheProbieren);
-
+function spracheFreischalten() {
+    if (s5Freigeschaltet || !spracheVerfuegbar()) return;
+    s5Freigeschaltet = true;
     try {
-        const probe = new SpeechSynthesisUtterance('eins');
-        probe.lang = 'de-DE';
-        probe.volume = 0;
-        const stimme = deutscheStimme();
-        if (stimme) probe.voice = stimme;
-
-        let frist = setTimeout(() => {
-            frist = null;
-            s5SpracheGeprueft = 'defekt';
-        }, S5_PROBEFRIST);
-
-        const fertig = (ergebnis) => {
-            if (frist) { clearTimeout(frist); frist = null; }
-            if (s5SpracheGeprueft === null) s5SpracheGeprueft = ergebnis;
-        };
-        probe.onend = () => fertig('ok');
-        probe.onerror = () => fertig('defekt');
-
-        s5Ansage = probe;   // Referenz halten
-        window.speechSynthesis.speak(probe);
-    } catch (e) {
-        s5SpracheGeprueft = 'defekt';
-    }
+        const leer = new SpeechSynthesisUtterance(' ');
+        leer.volume = 0;
+        window.speechSynthesis.speak(leer);
+    } catch (e) { /* ohne Freischaltung weiter */ }
 }
 
-document.addEventListener('pointerdown', spracheProbieren);
-document.addEventListener('touchstart', spracheProbieren);
+document.addEventListener('pointerdown', spracheFreischalten, { once: true });
+document.addEventListener('touchstart', spracheFreischalten, { once: true });
 
 /* Wird die App weggeklickt, bleibt eine laufende Ansage sonst hängen und
    verschluckt alle folgenden. */
