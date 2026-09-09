@@ -489,6 +489,7 @@ function submitAnswer(isCorrect, hinweis) {
 
 function endStationRound() {
     stopStationTimer();
+    stopSprache();   // Ansage und wartende Selbstprüfung beenden
     if (autoAdvanceTimeout) { clearTimeout(autoAdvanceTimeout); autoAdvanceTimeout = null; }
 
     earnedStars[currentStationIndex] = true;
@@ -951,6 +952,19 @@ let s5Zahl = 0;
 let s5Eingabe = '';
 let s5SprechTimeout = null;
 let s5AnsageTimeout = null;
+let s5PruefTimeout = null;
+
+/* Die laufende Ansage wird festgehalten: Chrome räumt eine nur örtlich
+   gehaltene Utterance mitten im Sprechen weg – die Sprachausgabe bleibt
+   danach stumm hängen. */
+let s5Ansage = null;
+
+/* Hat die Sprachausgabe versagt, wird das Zahlwort geschrieben – die
+   Aufgabe bleibt lösbar. Ein einzelner Aussetzer soll sie aber nicht
+   gleich für die ganze Sitzung abschalten. */
+let s5SpracheDefekt = false;
+let s5Fehlversuche = 0;
+const S5_MAX_FEHLVERSUCHE = 2;
 
 /* Zahlwort für 1–100 – wird der Sprachausgabe übergeben, damit auch
    Stimmen ohne deutsche Zahlenregeln richtig vorlesen. */
@@ -977,42 +991,137 @@ function zahlwortDE(zahl) {
 }
 
 /* ---- Sprachausgabe ---------------------------------------------- */
+/* Die Sprachausgabe ist der empfindlichste Teil der App: auf manchen
+   Tablets fehlt sie, auf anderen wirft sie oder bleibt hängen. Darum ist
+   hier jeder Zugriff abgesichert – fällt sie aus, wird das Zahlwort
+   geschrieben statt gesprochen. */
 function spracheVerfuegbar() {
-    return typeof window.speechSynthesis !== 'undefined' &&
-           typeof window.SpeechSynthesisUtterance !== 'undefined';
+    if (s5SpracheDefekt) return false;
+    try {
+        return typeof window.speechSynthesis !== 'undefined' &&
+               window.speechSynthesis !== null &&
+               typeof window.SpeechSynthesisUtterance === 'function';
+    } catch (e) {
+        return false;
+    }
+}
+
+/* Steht die Aufgabe überhaupt noch? Nach Ablauf der Zeit oder einem
+   Wechsel dürfen nachlaufende Timer nichts mehr auslösen. */
+function station5Aktiv() {
+    const screen = document.getElementById('stationScreen');
+    const body = document.getElementById('stationBody');
+    return !!screen && screen.classList.contains('active') &&
+           !!body && body.style.display !== 'none';
+}
+
+/* Eine Ansage ist fehlgeschlagen. Beim zweiten Mal hintereinander gilt:
+   dieses Gerät spricht nicht. */
+function ansageGescheitert() {
+    s5Fehlversuche++;
+    if (s5Fehlversuche >= S5_MAX_FEHLVERSUCHE) spracheAufgeben();
+}
+
+/* Sprachausgabe aufgeben: das Zahlwort tritt an die Stelle des
+   Lautsprecher-Knopfs, damit die Aufgabe lösbar bleibt. */
+function spracheAufgeben() {
+    if (s5SpracheDefekt) return;
+    s5SpracheDefekt = true;
+
+    const bereich = document.querySelector('.hoer-bereich');
+    if (!bereich) return;
+
+    const knopf = bereich.querySelector('.hoer-btn');
+    if (knopf && knopf.parentNode) {
+        const ersatz = document.createElement('div');
+        ersatz.className = 'hoer-ersatz';
+        ersatz.innerHTML = silbenHTML(zahlwortDE(s5Zahl));
+        knopf.parentNode.replaceChild(ersatz, knopf);
+    }
+
+    const hilfe = bereich.querySelector('.hilfe-bereich');
+    if (hilfe && hilfe.parentNode) hilfe.parentNode.removeChild(hilfe);
 }
 
 /* Möglichst eine deutsche Stimme wählen. Die Stimmenliste steht beim
    ersten Aufruf oft noch nicht bereit – dann greift der Standard. */
 function deutscheStimme() {
     if (!spracheVerfuegbar()) return null;
-    const stimmen = window.speechSynthesis.getVoices() || [];
-    return stimmen.find(s => s.lang && s.lang.toLowerCase().indexOf('de') === 0) || null;
+    try {
+        const stimmen = window.speechSynthesis.getVoices() || [];
+        return stimmen.find(s => s.lang && s.lang.toLowerCase().indexOf('de') === 0) || null;
+    } catch (e) {
+        return null;
+    }
 }
 
 function sprichZahl(zahl, langsam) {
     if (!spracheVerfuegbar()) return;
 
-    window.speechSynthesis.cancel();
+    if (s5AnsageTimeout) { clearTimeout(s5AnsageTimeout); s5AnsageTimeout = null; }
+
+    try {
+        // Nur abbrechen, wenn wirklich etwas läuft: ein cancel() im Leerlauf
+        // bringt die Sprachausgabe mancher Browser aus dem Tritt.
+        if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+            window.speechSynthesis.cancel();
+        }
+    } catch (e) { /* dann eben ohne Abbruch */ }
 
     // Erst abbrechen, dann in einem eigenen Schritt sprechen – direkt nach
     // cancel() gestartete Ansagen verschlucken manche Browser.
-    if (s5AnsageTimeout) clearTimeout(s5AnsageTimeout);
     s5AnsageTimeout = setTimeout(() => {
         s5AnsageTimeout = null;
+        if (zahl !== s5Zahl || !station5Aktiv()) return;
+        ansageStarten(zahl, langsam);
+    }, 120);
+}
+
+function ansageStarten(zahl, langsam) {
+    if (!spracheVerfuegbar()) return;
+
+    try {
+        // Nach einem Tabwechsel steht die Sprachausgabe pausiert da und
+        // verschluckt jede weitere Ansage.
+        if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+
         const text = new SpeechSynthesisUtterance(zahlwortDE(zahl));
         text.lang = 'de-DE';
         text.rate = langsam ? 0.6 : 0.9;
         const stimme = deutscheStimme();
         if (stimme) text.voice = stimme;
+
+        // Eine begonnene Ansage zählt als Beweis, dass es doch geht.
+        text.onstart = () => { s5Fehlversuche = 0; };
+
+        // 'interrupted' und 'canceled' sind unsere eigenen Abbrüche – alles
+        // andere heißt: hier kam kein Ton.
+        text.onerror = (ereignis) => {
+            const grund = ereignis && ereignis.error;
+            if (grund !== 'interrupted' && grund !== 'canceled') ansageGescheitert();
+        };
+
+        s5Ansage = text;   // Referenz halten, sonst räumt Chrome sie weg
         window.speechSynthesis.speak(text);
-    }, 120);
+    } catch (e) {
+        ansageGescheitert();
+    }
 }
 
+/* Räumt alles auf, was von Station 5 nachlaufen könnte: die Ansage und
+   die wartende Selbstprüfung. */
 function stopSprache() {
     if (s5SprechTimeout) { clearTimeout(s5SprechTimeout); s5SprechTimeout = null; }
     if (s5AnsageTimeout) { clearTimeout(s5AnsageTimeout); s5AnsageTimeout = null; }
-    if (spracheVerfuegbar()) window.speechSynthesis.cancel();
+    if (s5PruefTimeout)  { clearTimeout(s5PruefTimeout);  s5PruefTimeout = null; }
+    s5Ansage = null;
+
+    if (!spracheVerfuegbar()) return;
+    try {
+        if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+            window.speechSynthesis.cancel();
+        }
+    } catch (e) { /* nichts zu tun */ }
 }
 
 /* ---- Bausteine, die alle Aufgabentypen nutzen -------------------- */
@@ -1119,8 +1228,13 @@ function station5AnzeigeAktualisieren() {
     if (s5Eingabe.length >= Math.max(2, String(s5Zahl).length)) {
         const getippt = s5Eingabe;
         // kurze Pause, damit die letzte Ziffer noch zu sehen ist
-        setTimeout(() => {
-            if (!answerLocked && s5Eingabe === getippt) station5Pruefen();
+        if (s5PruefTimeout) clearTimeout(s5PruefTimeout);
+        s5PruefTimeout = setTimeout(() => {
+            s5PruefTimeout = null;
+            // In dieser Pause kann die Zeit abgelaufen sein – dann zählt
+            // die Eingabe nicht mehr.
+            if (answerLocked || s5Eingabe !== getippt || !station5Aktiv()) return;
+            station5Pruefen();
         }, 350);
     }
 }
@@ -1238,6 +1352,9 @@ function station5Bild() {
 /* Am Rechner darf auch die Tastatur benutzt werden */
 function station5Tastatur(e) {
     if (!document.getElementById('s5Tastenfeld') || answerLocked) return;
+    // Das Tastenfeld bleibt im Hintergrund stehen, wenn das Kind die
+    // Station verlässt – dann darf die Tastatur nichts mehr auslösen.
+    if (!station5Aktiv()) return;
 
     if (e.key >= '0' && e.key <= '9') {
         station5Tippe(e.key);
@@ -1255,10 +1372,36 @@ function station5Tastatur(e) {
 document.addEventListener('keydown', station5Tastatur);
 
 /* Stimmenliste vorwärmen – manche Browser laden sie erst nachträglich */
-if (spracheVerfuegbar() && typeof window.speechSynthesis.addEventListener === 'function') {
-    window.speechSynthesis.getVoices();
-    window.speechSynthesis.addEventListener('voiceschanged', deutscheStimme);
+try {
+    if (spracheVerfuegbar() && typeof window.speechSynthesis.addEventListener === 'function') {
+        window.speechSynthesis.getVoices();
+        window.speechSynthesis.addEventListener('voiceschanged', deutscheStimme);
+    }
+} catch (e) { /* ohne vorgewärmte Stimmenliste weiter */ }
+
+/* Tablets sprechen nur, wenn die Sprachausgabe einmal während einer
+   Berührung gestartet wurde. Die Ansagen kommen aber aus einem Timer –
+   darum beim ersten Antippen einmal lautlos sprechen und so freischalten. */
+let s5Freigeschaltet = false;
+
+function spracheFreischalten() {
+    if (s5Freigeschaltet || !spracheVerfuegbar()) return;
+    s5Freigeschaltet = true;
+    try {
+        const leer = new SpeechSynthesisUtterance(' ');
+        leer.volume = 0;
+        window.speechSynthesis.speak(leer);
+    } catch (e) { /* ohne Freischaltung weiter */ }
 }
+
+document.addEventListener('pointerdown', spracheFreischalten, { once: true });
+document.addEventListener('touchstart', spracheFreischalten, { once: true });
+
+/* Wird die App weggeklickt, bleibt eine laufende Ansage sonst hängen und
+   verschluckt alle folgenden. */
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopSprache();
+});
 
 /* ============================================
    9c. Station 6: Zahlwörter bauen
