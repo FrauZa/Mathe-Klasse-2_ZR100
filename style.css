@@ -178,6 +178,13 @@ body {
     box-shadow: var(--shadow);
 }
 
+/* ============================================
+   Silbenfärbung der Zahlwörter
+   Abwechselnd blau und rot – wie in der Silbenschrift.
+   ============================================ */
+.silbe-0 { color: #1565C0; }
+.silbe-1 { color: #C62828; }
+
 /* Auswahl-Bildschirme (Bereich, Unterkategorie und Übungsmodus):
    Titel und Frage stehen sonst direkt auf dem Hintergrundfoto und
    sind dort kaum zu lesen. */
@@ -928,6 +935,13 @@ body {
     border-color: var(--wort-farbe);
     color: #fff;
 }
+/* Auf hervorgehobenen Knöpfen zählt die Rückmeldung, nicht die Silbenfarbe */
+.wort-btn.gewaehlt .silbe,
+.wort-btn.wort-richtig .silbe,
+.wort-btn.wort-falsch .silbe {
+    color: inherit;
+}
+
 /* nach der Antwort */
 .wort-btn.wort-richtig {
     background-color: #c8e6c9;

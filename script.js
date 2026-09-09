@@ -42,6 +42,48 @@ const ZAHLWORTE = {
     60: 'sechzig', 70: 'siebzig', 80: 'achtzig', 90: 'neunzig', 100: 'einhundert'
 };
 
+/* ============================================
+   Silben der Zahlwörter
+   Die Silben werden abwechselnd eingefärbt – wie in der
+   Silbenschrift, die die Kinder aus dem Lesen kennen.
+   ============================================ */
+const SILBEN = {
+    ein: ['ein'], eins: ['eins'], zwei: ['zwei'], drei: ['drei'],
+    vier: ['vier'], 'fünf': ['fünf'], sechs: ['sechs'], sieben: ['sie', 'ben'],
+    acht: ['acht'], neun: ['neun'],
+
+    elf: ['elf'], 'zwölf': ['zwölf'],
+    dreizehn: ['drei', 'zehn'], vierzehn: ['vier', 'zehn'], 'fünfzehn': ['fünf', 'zehn'],
+    sechzehn: ['sech', 'zehn'], siebzehn: ['sieb', 'zehn'], achtzehn: ['acht', 'zehn'],
+    neunzehn: ['neun', 'zehn'],
+
+    zehn: ['zehn'], zwanzig: ['zwan', 'zig'], 'dreißig': ['drei', 'ßig'],
+    vierzig: ['vier', 'zig'], 'fünfzig': ['fünf', 'zig'], sechzig: ['sech', 'zig'],
+    siebzig: ['sieb', 'zig'], achtzig: ['acht', 'zig'], neunzig: ['neun', 'zig'],
+    einhundert: ['ein', 'hun', 'dert'],
+
+    und: ['und']
+};
+
+/* Zerlegt ein Zahlwort in seine Silben. Zusammengesetzte Wörter wie
+   "siebenundvierzig" werden am "und" getrennt und dann Teil für Teil zerlegt. */
+function silbenListe(wort) {
+    if (SILBEN[wort]) return SILBEN[wort];
+
+    const teile = wort.split('und');
+    if (teile.length === 2 && SILBEN[teile[0]] && SILBEN[teile[1]]) {
+        return SILBEN[teile[0]].concat(['und'], SILBEN[teile[1]]);
+    }
+    return [wort];   // unbekannt: lieber ungefärbt als falsch getrennt
+}
+
+/* Das Zahlwort als HTML mit abwechselnd gefärbten Silben */
+function silbenHTML(wort) {
+    return silbenListe(wort)
+        .map((silbe, i) => '<span class="silbe silbe-' + (i % 2) + '">' + silbe + '</span>')
+        .join('');
+}
+
 /* Erzeugt Antwort-Optionen: die richtige Zahl + Ablenker aus dem Zehnerraum */
 function buildNumberOptions(correct, count, min, max) {
     const options = [correct];
@@ -677,7 +719,7 @@ function station1Zuordnen() {
     let html;
     if (darstellung === 'zahlwort') {
         s1Wortzahl = zahl;
-        html = '<div class="zuordnen-karte">' + ZAHLWORTE[zahl] + '</div>' +
+        html = '<div class="zuordnen-karte">' + silbenHTML(ZAHLWORTE[zahl]) + '</div>' +
                station1VorleseHilfeHTML();
     } else if (darstellung === 'zehner') {
         html = '<div class="zuordnen-karte">' + anzahl + ' Z</div>';
@@ -979,7 +1021,7 @@ function station5HoerkopfHTML() {
     if (spracheVerfuegbar()) {
         return '<button class="hoer-btn" onclick="station5Vorlesen(false)">🔊 Nochmal hören</button>';
     }
-    return '<div class="hoer-ersatz">' + zahlwortDE(s5Zahl) + '</div>';
+    return '<div class="hoer-ersatz">' + silbenHTML(zahlwortDE(s5Zahl)) + '</div>';
 }
 
 /* Hilfe: noch einmal langsam vorlesen – startet bei jeder Aufgabe neu */
@@ -1249,7 +1291,7 @@ function station6NewTask() {
     for (let i = 1; i <= 9; i++) {
         einerSpalte += '<button class="wort-btn" id="s6E' + i + '" ' +
                        'onclick="station6Waehle(\'einer\', ' + i + ')">' +
-                       einerBaustein(i) + '</button>';
+                       silbenHTML(einerBaustein(i)) + '</button>';
     }
     einerSpalte += '</div>';
 
@@ -1257,7 +1299,7 @@ function station6NewTask() {
     for (let i = 1; i <= 9; i++) {
         zehnerSpalte += '<button class="wort-btn" id="s6Z' + (i * 10) + '" ' +
                         'onclick="station6Waehle(\'zehner\', ' + (i * 10) + ')">' +
-                        ZAHLWORTE[i * 10] + '</button>';
+                        silbenHTML(ZAHLWORTE[i * 10]) + '</button>';
     }
     zehnerSpalte += '</div>';
 
@@ -1303,7 +1345,7 @@ function station6Markieren() {
     if (!zeile) return;
 
     const teil = (wort) => wort
-        ? '<span class="wort-teil">' + wort + '</span>'
+        ? '<span class="wort-teil">' + silbenHTML(wort) + '</span>'
         : '<span class="wort-teil offen">?</span>';
 
     zeile.innerHTML = teil(s6Einer ? einerBaustein(s6Einer) : null) +
@@ -1337,7 +1379,7 @@ function station6Pruefen() {
     // Das vollständige Zahlwort steht danach einmal komplett da
     const zeile = document.getElementById('s6Ergebnis');
     if (zeile) {
-        zeile.innerHTML = '<span class="wort-loesung">' + zahlwortDE(s6Zahl) + '</span>';
+        zeile.innerHTML = '<span class="wort-loesung">' + silbenHTML(zahlwortDE(s6Zahl)) + '</span>';
         zeile.classList.add(ok ? 'ergebnis-richtig' : 'ergebnis-loesung');
         if (ok) leuchteGruen('s6Ergebnis');
     }
