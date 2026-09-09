@@ -25,11 +25,49 @@
     <div id="startScreen" class="screen active">
         <div class="content">
             <h1 class="main-title">Mathe Klasse 2 - Zahlenraum bis 100</h1>
-            <div class="button-grid" id="stationButtonGrid">
-                <!-- JS füllt dies mit einem Button pro Station -->
+            <div class="button-grid" id="bereichButtonGrid">
+                <!-- JS füllt dies mit einem Button pro Bereich -->
             </div>
             <div class="visitor-counter" title="Anzahl der Besuche">
                 <img src="https://api.visitorbadge.io/api/visitors?path=mathe-klasse-2-zr-100&label=Besuche&countColor=%23666666&style=flat" alt="Besucherzähler">
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         Auswahl der Station innerhalb eines Bereichs.
+         Die Buttons werden aus BEREICHE in script.js erzeugt.
+         ============================================ -->
+    <div id="bereichScreen" class="screen">
+        <div class="header">
+            <button class="back-btn" onclick="showScreen('startScreen')">
+                <span class="arrow">←</span> Zurück
+            </button>
+        </div>
+        <div class="content">
+            <h2 class="exercise-title" id="bereichTitle">Bereich</h2>
+            <p class="description">Welche Station möchtest du üben?</p>
+            <div class="button-grid" id="stationButtonGrid">
+                <!-- JS füllt dies mit einem Button pro Station -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         Auswahl der Unterkategorie – nur bei Stationen mit Unterstationen.
+         Die Buttons werden aus station.subStations in script.js erzeugt.
+         ============================================ -->
+    <div id="subScreen" class="screen">
+        <div class="header">
+            <button class="back-btn" onclick="backToBereich()">
+                <span class="arrow">←</span> Zurück
+            </button>
+        </div>
+        <div class="content">
+            <h2 class="exercise-title" id="subTitle">Station</h2>
+            <p class="description">Was möchtest du üben?</p>
+            <div class="button-grid" id="subButtonGrid">
+                <!-- JS füllt dies mit einem Button pro Unterkategorie -->
             </div>
         </div>
     </div>
@@ -39,7 +77,7 @@
          ============================================ -->
     <div id="modeScreen" class="screen">
         <div class="header">
-            <button class="back-btn" onclick="showScreen('startScreen')">
+            <button class="back-btn" onclick="backFromMode()">
                 <span class="arrow">←</span> Zurück
             </button>
         </div>
@@ -69,25 +107,25 @@
     <div id="stationScreen" class="screen exercise-screen">
         <div class="header" style="flex-direction: column; gap: 15px; width: 100%;">
             <div style="display: flex; justify-content: space-between; width: 100%;">
-                <button class="back-btn" onclick="showScreen('startScreen')">
+                <button class="back-btn" onclick="backToBereich()">
                     <span class="arrow">←</span> Zurück
                 </button>
-                <div class="stars-container" id="stationStars" style="font-size: 2.5rem; color: #ccc; text-shadow: 1px 1px 3px rgba(0,0,0,0.2);">
+                <div class="stars-container" id="stationStars">
                     <!-- JS füllt dies mit einem Stern pro Station -->
                 </div>
             </div>
 
             <!-- Tabs: Stationen -->
-            <div class="tabs-container" id="stationTabs" style="display: flex; gap: 5px; justify-content: center; width: 100%; font-size: 1.1rem; font-weight: bold; color: #888; flex-wrap: wrap;">
+            <div class="tabs-container" id="stationTabs">
                 <!-- JS füllt dies mit einem Tab pro Station -->
             </div>
 
             <!-- Tabs: Unterstationen der aktiven Station (nur wenn vorhanden) -->
-            <div class="tabs-container sub-tabs" id="stationSubTabs" style="display: none; gap: 5px; justify-content: center; width: 100%; font-weight: bold; color: #888; flex-wrap: wrap;">
+            <div class="tabs-container sub-tabs" id="stationSubTabs" style="display: none;">
                 <!-- JS füllt dies mit einem Tab pro Unterstation -->
             </div>
 
-            <div style="display: flex; justify-content: center; gap: 20px; align-items: center; width: 100%; margin-top: 10px;">
+            <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 20px; align-items: center; width: 100%; margin-top: 10px;">
                 <div class="timer-display" id="stationTimerDisplay" style="font-size: 1.5rem; font-weight: bold; background: #eee; padding: 5px 15px; border-radius: 10px;">02:00</div>
                 <div class="progress" style="font-size: 1.2rem;">Punkte: <span id="stationScore">0</span></div>
                 <!-- Nur im Modus "Eigenes Tempo": Runde selbst beenden -->

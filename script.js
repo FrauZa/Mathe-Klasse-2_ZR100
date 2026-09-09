@@ -9,6 +9,7 @@
 function showScreen(screenId) {
     stopStationTimer();
     stopKonfetti();
+    stopSprache();
     if (autoAdvanceTimeout) { clearTimeout(autoAdvanceTimeout); autoAdvanceTimeout = null; }
 
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -133,6 +134,7 @@ function stopKonfetti() {
    ============================================ */
 const STATION_ZEIT = 120; // Sekunden pro Station
 
+let aktiverBereich = 0;
 let currentStationIndex = 0;
 let currentSubIndex = 0;
 let stationModus = 'zeit';      // 'zeit' oder 'tempo'
@@ -179,8 +181,47 @@ function updateStationTimerDisplay() {
 }
 
 /* ============================================
-   Modus-Auswahl vor jedem Aufgabenmodul
+   Auswahl vor jedem Aufgabenmodul:
+   1. Unterkategorie (nur wenn die Station welche hat)
+   2. Übungsmodus (eigenes Tempo oder auf Zeit)
    ============================================ */
+/* Einstieg aus dem Hauptmenü und aus den Tabs */
+function openStation(index) {
+    aktiverBereich = bereichVon(index);
+    if (STATIONS[index].subStations) showSubStationScreen(index);
+    else showModeScreen(index, 0);
+}
+
+function showSubStationScreen(index) {
+    pendingStationIndex = index;
+
+    const station = STATIONS[index];
+    const titel = document.getElementById('subTitle');
+    titel.innerText = station.title;
+    titel.className = 'exercise-title ' + station.color + '-color';
+
+    const grid = document.getElementById('subButtonGrid');
+    grid.innerHTML = '';
+    station.subStations.forEach((sub, i) => {
+        grid.innerHTML +=
+            '<button class="operation-btn ' + station.color + '" ' +
+            'onclick="showModeScreen(' + index + ', ' + i + ')">' +
+            '<span class="emoji">' + (sub.emoji || station.emoji) + '</span>' +
+            '<span class="text">' + (i + 1) + '. ' + sub.name + '</span>' +
+            (sub.hinweis ? '<span class="hinweis">' + sub.hinweis + '</span>' : '') +
+            '</button>';
+    });
+
+    showScreen('subScreen');
+}
+
+/* Zurück vom Modus-Bildschirm: zur Unterkategorie oder ins Hauptmenü */
+function backFromMode() {
+    const station = STATIONS[pendingStationIndex];
+    if (station && station.subStations) showSubStationScreen(pendingStationIndex);
+    else backToBereich();
+}
+
 function showModeScreen(index, subIndex) {
     pendingStationIndex = index;
     pendingSubIndex = subIndex || 0;
@@ -203,32 +244,74 @@ function startStationWithMode(modus) {
 
 /* Hauptmenü, Tabs und Sterne aus der STATIONS-Liste aufbauen */
 function buildStationUI() {
-    const grid = document.getElementById('stationButtonGrid');
-    const tabs = document.getElementById('stationTabs');
+    const grid = document.getElementById('bereichButtonGrid');
     const stars = document.getElementById('stationStars');
     const resultStars = document.getElementById('resultStars');
 
     grid.innerHTML = '';
-    tabs.innerHTML = '';
     stars.innerHTML = '';
     resultStars.innerHTML = '';
 
-    STATIONS.forEach((station, i) => {
+    BEREICHE.forEach((bereich, i) => {
         grid.innerHTML +=
-            '<button class="operation-btn ' + station.color + '" onclick="showModeScreen(' + i + ')">' +
-            '<span class="emoji">' + station.emoji + '</span>' +
-            '<span class="text">' + (i + 1) + '. ' + station.name + '</span>' +
+            '<button class="operation-btn ' + bereich.color + '" onclick="showBereich(' + i + ')">' +
+            '<span class="emoji">' + bereich.emoji + '</span>' +
+            '<span class="text">' + bereich.name + '</span>' +
+            '<span class="hinweis">' + bereich.hinweis + '</span>' +
             '</button>';
+    });
 
-        tabs.innerHTML +=
-            '<div class="tab" id="stationTab' + i + '" onclick="showModeScreen(' + i + ')" style="cursor: pointer;">' +
-            (i + 1) + '. ' + station.name + '</div>';
-
+    // Ein Stern pro Station – der Gesamtfortschritt der App
+    STATIONS.forEach((station, i) => {
         stars.innerHTML += '<span id="stationStar' + i + '">☆</span>';
         resultStars.innerHTML += '<span style="color: gold; text-shadow: 0 0 15px rgba(255,215,0,0.8);">⭐</span>';
     });
 
     earnedStars = STATIONS.map(() => false);
+}
+
+/* Zu welchem Bereich gehört eine Station? */
+function bereichVon(stationIndex) {
+    return BEREICHE.findIndex(b => b.stationen.indexOf(stationIndex) !== -1);
+}
+
+/* Die Stationen eines Bereichs zur Auswahl anbieten */
+function showBereich(bereichIndex) {
+    aktiverBereich = bereichIndex;
+    const bereich = BEREICHE[bereichIndex];
+
+    const titel = document.getElementById('bereichTitle');
+    titel.innerText = bereich.name;
+    titel.className = 'exercise-title ' + bereich.color + '-color';
+
+    const grid = document.getElementById('stationButtonGrid');
+    grid.innerHTML = '';
+    bereich.stationen.forEach(index => {
+        const station = STATIONS[index];
+        grid.innerHTML +=
+            '<button class="operation-btn ' + station.color + '" onclick="openStation(' + index + ')">' +
+            '<span class="emoji">' + station.emoji + '</span>' +
+            '<span class="text">' + (index + 1) + '. ' + station.name + '</span>' +
+            '</button>';
+    });
+
+    showScreen('bereichScreen');
+}
+
+/* Zurück aus Unterkategorie oder Übung: in den Bereich der Station */
+function backToBereich() {
+    showBereich(aktiverBereich);
+}
+
+/* Tab-Reihe: nur die Stationen des aktuellen Bereichs */
+function buildStationTabs(bereichIndex) {
+    const tabs = document.getElementById('stationTabs');
+    tabs.innerHTML = '';
+    BEREICHE[bereichIndex].stationen.forEach(index => {
+        tabs.innerHTML +=
+            '<div class="tab" id="stationTab' + index + '" onclick="openStation(' + index + ')" ' +
+            'style="cursor: pointer;">' + (index + 1) + '. ' + STATIONS[index].name + '</div>';
+    });
 }
 
 /* Zweite Tab-Reihe für die Unterstationen der aktiven Station.
@@ -276,6 +359,8 @@ function startStation(index, subIndex, modus) {
     answerLocked = false;
 
     const station = STATIONS[index];
+    aktiverBereich = bereichVon(index);
+    buildStationTabs(aktiverBereich);
     buildSubTabs(station);
 
     document.getElementById('stationScore').innerText = '0';
@@ -311,6 +396,7 @@ function startStation(index, subIndex, modus) {
 /* Neue Aufgabe der aktuellen Station */
 function newStationTask() {
     if (autoAdvanceTimeout) { clearTimeout(autoAdvanceTimeout); autoAdvanceTimeout = null; }
+    stopSprache();
     answerLocked = false;
 
     const station = STATIONS[currentStationIndex];
@@ -401,7 +487,7 @@ function proceedToNextStation() {
 
     let next = (currentStationIndex + 1) % STATIONS.length;
     while (earnedStars[next]) next = (next + 1) % STATIONS.length;
-    showModeScreen(next);   // auch hier darf der Modus neu gewählt werden
+    openStation(next);   // auch hier darf neu gewählt werden
 }
 
 /* ============================================
@@ -515,6 +601,7 @@ function toggleRechenHilfe() {
    Arbeitsblatt: Bild → Zehnerzahl, Zahl → Zehnerstangen legen, Zuordnen
    ============================================ */
 let s1BuildCount = 0;
+let s1Wortzahl = 0;   // Zahl der aktuellen Zahlwort-Karte, für die Vorlesehilfe
 
 function station1NewTask() {
     const typ = pick(['bild2zahl', 'zahl2bild', 'zuordnen']);
@@ -568,6 +655,20 @@ function station1SetBuild(n) {
     document.getElementById('s1BauAnzeige').innerText = s1BuildCount;
 }
 
+/* Hilfe zur Zahlwort-Karte: das Wort vorlesen lassen. Sie muss jedes Mal
+   neu angetippt werden – wer das Wort selbst lesen kann, braucht sie nicht. */
+function station1VorleseHilfeHTML() {
+    if (!spracheVerfuegbar()) return '';
+    const farbe = 'var(--color-' + STATIONS[currentStationIndex].color + ')';
+    return '<div class="hilfe-bereich" style="--hilfe-farbe: ' + farbe + ';">' +
+           '<button class="hilfe-btn" onclick="station1Vorlesen()">🔊 Wort vorlesen</button>' +
+           '</div>';
+}
+
+function station1Vorlesen() {
+    sprichZahl(s1Wortzahl, false);
+}
+
 function station1Zuordnen() {
     const anzahl = randomInt(1, 10);
     const zahl = anzahl * 10;
@@ -575,7 +676,9 @@ function station1Zuordnen() {
 
     let html;
     if (darstellung === 'zahlwort') {
-        html = '<div class="zuordnen-karte">' + ZAHLWORTE[zahl] + '</div>';
+        s1Wortzahl = zahl;
+        html = '<div class="zuordnen-karte">' + ZAHLWORTE[zahl] + '</div>' +
+               station1VorleseHilfeHTML();
     } else if (darstellung === 'zehner') {
         html = '<div class="zuordnen-karte">' + anzahl + ' Z</div>';
     } else if (darstellung === 'stellentafel') {
@@ -797,6 +900,707 @@ function station4Rechnen() {
 }
 
 /* ============================================
+   9b. Station 5: Zahlen hören
+   Die Zahl wird vorgelesen, das Kind tippt sie über
+   ein Tastenfeld ein. Drei Unterstationen mit
+   wachsendem Zahlenraum.
+   ============================================ */
+let s5Zahl = 0;
+let s5Eingabe = '';
+let s5SprechTimeout = null;
+let s5AnsageTimeout = null;
+
+/* Zahlwort für 1–100 – wird der Sprachausgabe übergeben, damit auch
+   Stimmen ohne deutsche Zahlenregeln richtig vorlesen. */
+const S5_EINER = ['null', 'eins', 'zwei', 'drei', 'vier', 'fünf', 'sechs', 'sieben', 'acht', 'neun'];
+const S5_TEENS = {
+    11: 'elf', 12: 'zwölf', 13: 'dreizehn', 14: 'vierzehn', 15: 'fünfzehn',
+    16: 'sechzehn', 17: 'siebzehn', 18: 'achtzehn', 19: 'neunzehn'
+};
+
+/* Der Einer so, wie er im zusammengesetzten Zahlwort steht:
+   "einundzwanzig" – nicht "einsundzwanzig". */
+function einerBaustein(e) {
+    return (e === 1) ? 'ein' : S5_EINER[e];
+}
+
+function zahlwortDE(zahl) {
+    if (S5_TEENS[zahl]) return S5_TEENS[zahl];
+    if (ZAHLWORTE[zahl]) return ZAHLWORTE[zahl];
+    if (zahl < 10) return S5_EINER[zahl];
+
+    const e = zahl % 10;
+    const z = zahl - e;
+    return einerBaustein(e) + 'und' + ZAHLWORTE[z];
+}
+
+/* ---- Sprachausgabe ---------------------------------------------- */
+function spracheVerfuegbar() {
+    return typeof window.speechSynthesis !== 'undefined' &&
+           typeof window.SpeechSynthesisUtterance !== 'undefined';
+}
+
+/* Möglichst eine deutsche Stimme wählen. Die Stimmenliste steht beim
+   ersten Aufruf oft noch nicht bereit – dann greift der Standard. */
+function deutscheStimme() {
+    if (!spracheVerfuegbar()) return null;
+    const stimmen = window.speechSynthesis.getVoices() || [];
+    return stimmen.find(s => s.lang && s.lang.toLowerCase().indexOf('de') === 0) || null;
+}
+
+function sprichZahl(zahl, langsam) {
+    if (!spracheVerfuegbar()) return;
+
+    window.speechSynthesis.cancel();
+
+    // Erst abbrechen, dann in einem eigenen Schritt sprechen – direkt nach
+    // cancel() gestartete Ansagen verschlucken manche Browser.
+    if (s5AnsageTimeout) clearTimeout(s5AnsageTimeout);
+    s5AnsageTimeout = setTimeout(() => {
+        s5AnsageTimeout = null;
+        const text = new SpeechSynthesisUtterance(zahlwortDE(zahl));
+        text.lang = 'de-DE';
+        text.rate = langsam ? 0.6 : 0.9;
+        const stimme = deutscheStimme();
+        if (stimme) text.voice = stimme;
+        window.speechSynthesis.speak(text);
+    }, 120);
+}
+
+function stopSprache() {
+    if (s5SprechTimeout) { clearTimeout(s5SprechTimeout); s5SprechTimeout = null; }
+    if (s5AnsageTimeout) { clearTimeout(s5AnsageTimeout); s5AnsageTimeout = null; }
+    if (spracheVerfuegbar()) window.speechSynthesis.cancel();
+}
+
+/* ---- Bausteine, die alle Aufgabentypen nutzen -------------------- */
+/* Lautsprecher-Knopf – ohne Sprachausgabe steht das Zahlwort geschrieben da */
+function station5HoerkopfHTML() {
+    if (spracheVerfuegbar()) {
+        return '<button class="hoer-btn" onclick="station5Vorlesen(false)">🔊 Nochmal hören</button>';
+    }
+    return '<div class="hoer-ersatz">' + zahlwortDE(s5Zahl) + '</div>';
+}
+
+/* Hilfe: noch einmal langsam vorlesen – startet bei jeder Aufgabe neu */
+function station5LangsamHTML(farbe) {
+    if (!spracheVerfuegbar()) return '';
+    return '<div class="hilfe-bereich" style="--hilfe-farbe: ' + farbe + ';">' +
+           '<button class="hilfe-btn" onclick="station5Vorlesen(true)">🐌 Langsam vorlesen</button>' +
+           '</div>';
+}
+
+/* ---- Die Unterstationen ------------------------------------------ */
+function station5Zehner()  { station5Aufgabe(10, 100, true); }
+function station5Bis100()  { station5Aufgabe(1, 100, false); }
+
+/* Einstellige Zahlen kommen nur selten dran – gehört und getippt werden
+   sollen vor allem die zweistelligen Zahlen. */
+function station5Zufallszahl(min, max) {
+    if (max > 9 && min <= 9 && Math.random() > 0.12) return randomInt(10, max);
+    return randomInt(min, max);
+}
+
+function station5Aufgabe(min, max, nurZehner) {
+    s5Zahl = nurZehner ? randomInt(min / 10, max / 10) * 10 : station5Zufallszahl(min, max);
+    s5Eingabe = '';
+
+    setInstruction('Höre gut zu und tippe die Zahl ein.');
+
+    const farbe = 'var(--color-' + STATIONS[currentStationIndex].color + ')';
+
+    document.getElementById('stationOptions').classList.remove('bild-opts');
+
+    let html = '<div class="hoer-bereich" style="--hoer-farbe: ' + farbe + ';">';
+    html += station5HoerkopfHTML();
+    html += '<div class="hoer-anzeige zahl-karte luecke" id="s5Anzeige">?</div>';
+
+    html += '<div class="tastenfeld" id="s5Tastenfeld">';
+    for (let i = 1; i <= 9; i++) {
+        html += '<button class="taste" onclick="station5Tippe(\'' + i + '\')">' + i + '</button>';
+    }
+    html += '<button class="taste taste-loeschen" onclick="station5Loeschen()">←</button>';
+    html += '<button class="taste" onclick="station5Tippe(\'0\')">0</button>';
+    html += '</div>';
+
+    html += station5LangsamHTML(farbe);
+    html += '</div>';
+    setTaskArea(html);
+
+    renderCheckButton('Prüfen ✓', station5Pruefen);
+    station5FertigAktualisieren();
+
+    // Kurz warten, damit das Kind die Aufgabe erst sieht und dann hört
+    if (s5SprechTimeout) clearTimeout(s5SprechTimeout);
+    s5SprechTimeout = setTimeout(() => sprichZahl(s5Zahl, false), 500);
+}
+
+function station5Vorlesen(langsam) {
+    if (answerLocked) return;
+    sprichZahl(s5Zahl, langsam);
+}
+
+/* Die gelöste Zahl leuchtet kurz grün auf – dann kommt die nächste Ansage */
+function leuchteGruen(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('leuchtet');
+}
+
+/* ---- Eingabe ---------------------------------------------------- */
+function station5Tippe(ziffer) {
+    if (answerLocked) return;
+    if (s5Eingabe.length >= 3) return;
+    if (s5Eingabe === '' && ziffer === '0') return;   // keine führende Null
+
+    const neu = s5Eingabe + ziffer;
+    if (parseInt(neu, 10) > 100) return;              // Zahlenraum bis 100
+
+    s5Eingabe = neu;
+    station5AnzeigeAktualisieren();
+}
+
+function station5Loeschen() {
+    if (answerLocked) return;
+    s5Eingabe = s5Eingabe.slice(0, -1);
+    station5AnzeigeAktualisieren();
+}
+
+function station5AnzeigeAktualisieren() {
+    const anzeige = document.getElementById('s5Anzeige');
+    if (!anzeige) return;
+    anzeige.textContent = s5Eingabe === '' ? '?' : s5Eingabe;
+    anzeige.classList.toggle('luecke', s5Eingabe === '');
+    station5FertigAktualisieren();
+
+    // Steht die Zahl vollständig da, wird sofort geprüft – kein Extra-Tipp nötig.
+    // Mindestens zwei Ziffern, damit die erste Ziffer einer zweistelligen
+    // Zahl nicht schon als Antwort gewertet wird.
+    if (s5Eingabe.length >= Math.max(2, String(s5Zahl).length)) {
+        const getippt = s5Eingabe;
+        // kurze Pause, damit die letzte Ziffer noch zu sehen ist
+        setTimeout(() => {
+            if (!answerLocked && s5Eingabe === getippt) station5Pruefen();
+        }, 350);
+    }
+}
+
+/* Der Knopf wird meist nicht mehr gebraucht – er bleibt für den Fall,
+   dass eine kürzere Zahl als erwartet eingetippt wurde.
+   Gesperrt, solange noch nichts dasteht. */
+function station5FertigAktualisieren() {
+    const btn = document.querySelector('#stationOptions .check-btn');
+    if (btn) btn.disabled = (s5Eingabe === '');
+}
+
+function station5Pruefen() {
+    if (answerLocked || s5Eingabe === '') return;
+    stopSprache();
+
+    const pruefBtn = document.querySelector('#stationOptions .check-btn');
+    if (pruefBtn) pruefBtn.disabled = true;
+
+    const ok = (parseInt(s5Eingabe, 10) === s5Zahl);
+    fillLuecke('s5Anzeige', s5Zahl, ok);
+    if (ok) leuchteGruen('s5Anzeige');
+
+    const feld = document.getElementById('s5Tastenfeld');
+    if (feld) Array.from(feld.children).forEach(b => b.disabled = true);
+
+    submitAnswer(ok, 'Das war die ' + s5Zahl + ' (' + zahlwortDE(s5Zahl) + ').');
+}
+
+/* ---- Zahlbild: Zehnerstangen + Einerwürfel ---------------------- */
+/* Die Einer stehen in Fünferspalten, damit sie – wie die Stangen –
+   auf einen Blick erfassbar bleiben. */
+function einerHTML(anzahl) {
+    if (!anzahl) return '';
+
+    let html = '<div class="einer-block">';
+    let rest = anzahl;
+    while (rest > 0) {
+        const inSpalte = Math.min(5, rest);
+        html += '<div class="einer-spalte">';
+        for (let i = 0; i < inSpalte; i++) html += '<span class="einer-wuerfel"></span>';
+        html += '</div>';
+        rest -= inSpalte;
+    }
+    return html + '</div>';
+}
+
+function zahlbildHTML(zahl) {
+    const z = Math.floor(zahl / 10);
+    const e = zahl % 10;
+
+    return '<div class="zahlbild">' +
+           (z ? zehnerstangenHTML([{ count: z, variant: 'a' }]) : '') +
+           einerHTML(e) +
+           '</div>';
+}
+
+/* ---- Unterstation "Bild finden" --------------------------------- */
+/* Die Ablenker sind die typischen Hörfehler: Zehner und Einer
+   vertauscht, ein Zehner daneben, ein Einer daneben. */
+function station5BildOptionen(zahl) {
+    const z = Math.floor(zahl / 10);
+    const e = zahl % 10;
+
+    const vertauscht = e * 10 + z;   // 47 hören, 74 legen
+
+    const weitere = [];
+    if (z < 9) weitere.push((z + 1) * 10 + e);
+    if (z > 1) weitere.push((z - 1) * 10 + e);
+    if (e < 9) weitere.push(z * 10 + e + 1);
+    if (e > 1) weitere.push(z * 10 + e - 1);
+
+    const ablenker = shuffle(weitere)
+        .filter(w => w !== zahl && w !== vertauscht)
+        .slice(0, 2);
+
+    return shuffle([zahl, vertauscht].concat(ablenker));
+}
+
+function station5Bild() {
+    // Zehner und Einer verschieden, damit das Vertauschen sichtbar wird
+    const z = randomInt(1, 9);
+    let e = randomInt(1, 9);
+    while (e === z) e = randomInt(1, 9);
+
+    s5Zahl = z * 10 + e;
+    s5Eingabe = '';
+
+    setInstruction('Höre gut zu. Welches Bild zeigt die Zahl?');
+
+    const farbe = 'var(--color-' + STATIONS[currentStationIndex].color + ')';
+    setTaskArea(
+        '<div class="hoer-bereich" style="--hoer-farbe: ' + farbe + ';">' +
+        station5HoerkopfHTML() +
+        '<div class="hoer-anzeige zahl-karte luecke" id="s5BildZahl">?</div>' +
+        station5LangsamHTML(farbe) +
+        '</div>'
+    );
+
+    const opts = document.getElementById('stationOptions');
+    opts.classList.add('bild-opts');
+
+    renderOptions(station5BildOptionen(s5Zahl), s5Zahl, zahlbildHTML,
+        zahlwortDE(s5Zahl) + ' sind ' + z + ' Zehner und ' + e + ' Einer.',
+        // Die gehörte Zahl danach als Ziffern zeigen
+        (wert, ok) => {
+            fillLuecke('s5BildZahl', s5Zahl, ok);
+            if (ok) leuchteGruen('s5BildZahl');
+        });
+
+    if (s5SprechTimeout) clearTimeout(s5SprechTimeout);
+    s5SprechTimeout = setTimeout(() => sprichZahl(s5Zahl, false), 500);
+}
+
+/* Am Rechner darf auch die Tastatur benutzt werden */
+function station5Tastatur(e) {
+    if (!document.getElementById('s5Tastenfeld') || answerLocked) return;
+
+    if (e.key >= '0' && e.key <= '9') {
+        station5Tippe(e.key);
+        e.preventDefault();
+    } else if (e.key === 'Backspace') {
+        station5Loeschen();
+        e.preventDefault();
+    } else if (e.key === 'Enter' && s5Eingabe !== '') {
+        const btn = document.querySelector('#stationOptions .check-btn');
+        if (btn && !btn.disabled) btn.click();
+        e.preventDefault();
+    }
+}
+
+document.addEventListener('keydown', station5Tastatur);
+
+/* Stimmenliste vorwärmen – manche Browser laden sie erst nachträglich */
+if (spracheVerfuegbar() && typeof window.speechSynthesis.addEventListener === 'function') {
+    window.speechSynthesis.getVoices();
+    window.speechSynthesis.addEventListener('voiceschanged', deutscheStimme);
+}
+
+/* ============================================
+   9c. Station 6: Zahlwörter bauen
+   Die Zahl steht als Ziffern da. Links die Einerwörter,
+   in der Mitte "und", rechts die Zehnerwörter – das Kind
+   klickt die beiden Bausteine an.
+   Das übt genau die deutsche Besonderheit: erst die Einer,
+   dann die Zehner (47 → siebenundvierzig).
+   ============================================ */
+let s6Zahl = 0;
+let s6Einer = null;    // angeklickte Einerzahl (1–9)
+let s6Zehner = null;   // angeklickte Zehnerzahl (10–90)
+
+function station6NewTask() {
+    // Ab 20: elf, zwölf, dreizehn … sind Sonderformen und lassen sich
+    // nicht aus "ein/zwei/drei + und + zehn" zusammensetzen.
+    const z = randomInt(2, 9);
+    const e = randomInt(1, 9);
+
+    s6Zahl = z * 10 + e;
+    s6Einer = null;
+    s6Zehner = null;
+
+    setInstruction('Aus welchen Wörtern besteht die Zahl? Klicke beide an.');
+
+    const farbe = 'var(--color-' + STATIONS[currentStationIndex].color + ')';
+
+    let einerSpalte = '<div class="wort-spalte">';
+    for (let i = 1; i <= 9; i++) {
+        einerSpalte += '<button class="wort-btn" id="s6E' + i + '" ' +
+                       'onclick="station6Waehle(\'einer\', ' + i + ')">' +
+                       einerBaustein(i) + '</button>';
+    }
+    einerSpalte += '</div>';
+
+    let zehnerSpalte = '<div class="wort-spalte">';
+    for (let i = 1; i <= 9; i++) {
+        zehnerSpalte += '<button class="wort-btn" id="s6Z' + (i * 10) + '" ' +
+                        'onclick="station6Waehle(\'zehner\', ' + (i * 10) + ')">' +
+                        ZAHLWORTE[i * 10] + '</button>';
+    }
+    zehnerSpalte += '</div>';
+
+    setTaskArea(
+        '<div class="wortbau-bereich" style="--wort-farbe: ' + farbe + ';">' +
+        '<div class="zahl-gross">' + s6Zahl + '</div>' +
+        '<div class="wortbau">' + einerSpalte +
+        '<div class="wort-und">und</div>' + zehnerSpalte + '</div>' +
+        '<div class="wort-ergebnis" id="s6Ergebnis"></div>' +
+        '</div>'
+    );
+
+    station6Markieren();
+}
+
+function station6Waehle(spalte, wert) {
+    if (answerLocked) return;
+
+    if (spalte === 'einer') s6Einer = wert;
+    else s6Zehner = wert;
+
+    station6Markieren();
+
+    // Sobald beide Bausteine stehen, wird von selbst geprüft
+    if (s6Einer !== null && s6Zehner !== null) {
+        const stand = s6Einer + '-' + s6Zehner;
+        setTimeout(() => {
+            if (!answerLocked && (s6Einer + '-' + s6Zehner) === stand) station6Pruefen();
+        }, 350);
+    }
+}
+
+/* Angeklickte Wörter hervorheben und die Ergebniszeile mitschreiben */
+function station6Markieren() {
+    for (let i = 1; i <= 9; i++) {
+        const eBtn = document.getElementById('s6E' + i);
+        const zBtn = document.getElementById('s6Z' + (i * 10));
+        if (eBtn) eBtn.classList.toggle('gewaehlt', s6Einer === i);
+        if (zBtn) zBtn.classList.toggle('gewaehlt', s6Zehner === i * 10);
+    }
+
+    const zeile = document.getElementById('s6Ergebnis');
+    if (!zeile) return;
+
+    const teil = (wort) => wort
+        ? '<span class="wort-teil">' + wort + '</span>'
+        : '<span class="wort-teil offen">?</span>';
+
+    zeile.innerHTML = teil(s6Einer ? einerBaustein(s6Einer) : null) +
+                      '<span class="wort-teil-und">und</span>' +
+                      teil(s6Zehner ? ZAHLWORTE[s6Zehner] : null);
+}
+
+function station6Pruefen() {
+    if (answerLocked || s6Einer === null || s6Zehner === null) return;
+
+    const ok = (s6Zehner + s6Einer === s6Zahl);
+    const richtigE = s6Zahl % 10;
+    const richtigZ = s6Zahl - richtigE;
+
+    // Wörter sperren, die richtigen grün, ein falscher Klick rot
+    for (let i = 1; i <= 9; i++) {
+        const eBtn = document.getElementById('s6E' + i);
+        const zBtn = document.getElementById('s6Z' + (i * 10));
+        if (eBtn) {
+            eBtn.disabled = true;
+            if (i === richtigE) eBtn.classList.add('wort-richtig');
+            else if (i === s6Einer) eBtn.classList.add('wort-falsch');
+        }
+        if (zBtn) {
+            zBtn.disabled = true;
+            if (i * 10 === richtigZ) zBtn.classList.add('wort-richtig');
+            else if (i * 10 === s6Zehner) zBtn.classList.add('wort-falsch');
+        }
+    }
+
+    // Das vollständige Zahlwort steht danach einmal komplett da
+    const zeile = document.getElementById('s6Ergebnis');
+    if (zeile) {
+        zeile.innerHTML = '<span class="wort-loesung">' + zahlwortDE(s6Zahl) + '</span>';
+        zeile.classList.add(ok ? 'ergebnis-richtig' : 'ergebnis-loesung');
+        if (ok) leuchteGruen('s6Ergebnis');
+    }
+
+    submitAnswer(ok, s6Zahl + ' heißt ' + zahlwortDE(s6Zahl) +
+                     ' – im Deutschen zuerst die Einer, dann die Zehner.');
+}
+
+/* ============================================
+   9d. Station 7: Paare finden
+   Zahlenkarten (blauer Punkt) und Strichbild-Karten
+   (oranger Punkt) liegen gemischt auf dem Tisch.
+   Das Kind tippt eine Zahl und das passende Bild an.
+   Strichbild: ein Strich = ein Zehner, ein Punkt = ein Einer.
+   ============================================ */
+const S7_PAARE = 4;    // Paare pro Runde
+
+let s7Karten = [];     // { id, typ: 'zahl' | 'bild', zahl, gepaart }
+let s7Auswahl = null;  // id der zuerst angetippten Karte
+let s7Offen = 0;       // noch zu findende Paare
+
+/* Strichdarstellung: Zehner als Striche, Einer als Punkte in Fünferspalten */
+function strichbildHTML(zahl) {
+    const z = Math.floor(zahl / 10);
+    const e = zahl % 10;
+
+    // Gebündelt wie in der Strichliste: je fünf Zehner zusammen,
+    // der fünfte Strich liegt quer über den ersten vier.
+    let html = '<div class="strichbild"><div class="strich-gruppe">';
+    let restZ = z;
+    while (restZ > 0) {
+        const imBuendel = Math.min(5, restZ);
+        html += '<div class="strich-buendel">';
+        for (let i = 0; i < (imBuendel === 5 ? 4 : imBuendel); i++) {
+            html += '<span class="zehner-strich"></span>';
+        }
+        if (imBuendel === 5) html += '<span class="quer-strich"></span>';
+        html += '</div>';
+        restZ -= imBuendel;
+    }
+    html += '</div>';
+
+    if (e) {
+        html += '<div class="punkt-gruppe">';
+        let rest = e;
+        while (rest > 0) {
+            const inSpalte = Math.min(5, rest);
+            html += '<div class="punkt-spalte">';
+            for (let i = 0; i < inSpalte; i++) html += '<span class="einer-punkt"></span>';
+            html += '</div>';
+            rest -= inSpalte;
+        }
+        html += '</div>';
+    }
+    return html + '</div>';
+}
+
+function station7NewTask() {
+    const zahlen = [];
+    while (zahlen.length < S7_PAARE) {
+        const zahl = randomInt(11, 99);
+        if (zahlen.indexOf(zahl) === -1) zahlen.push(zahl);
+    }
+
+    s7Karten = [];
+    zahlen.forEach((zahl, i) => {
+        s7Karten.push({ id: 'z' + i, typ: 'zahl', zahl: zahl, gepaart: false });
+        s7Karten.push({ id: 'b' + i, typ: 'bild', zahl: zahl, gepaart: false });
+    });
+    s7Karten = shuffle(s7Karten);
+    s7Auswahl = null;
+    s7Offen = S7_PAARE;
+
+    setInstruction('Finde die Paare: Welches Bild gehört zu welcher Zahl?');
+
+    const farbe = 'var(--color-' + STATIONS[currentStationIndex].color + ')';
+    let html = '<div class="paar-feld" style="--paar-farbe: ' + farbe + ';">';
+    s7Karten.forEach(karte => {
+        // leichte Drehung, damit die Karten wie hingelegt wirken
+        const dreh = randomInt(-40, 40) / 10;
+        html += '<button class="paar-karte paar-' + karte.typ + '" id="s7' + karte.id + '" ' +
+                'style="--dreh: ' + dreh + 'deg;" ' +
+                'onclick="station7Tippe(\'' + karte.id + '\')">' +
+                '<span class="paar-punkt"></span>' +
+                (karte.typ === 'zahl'
+                    ? '<span class="paar-wert">' + karte.zahl + '</span>'
+                    : strichbildHTML(karte.zahl)) +
+                '<span class="paar-loesung" id="s7L' + karte.id + '"></span>' +
+                '</button>';
+    });
+    setTaskArea(html + '</div>');
+}
+
+function station7Tippe(id) {
+    if (answerLocked) return;
+
+    const karte = s7Karten.find(k => k.id === id);
+    if (!karte || karte.gepaart) return;
+
+    // Nochmal auf dieselbe Karte tippen = Auswahl wieder aufheben
+    if (s7Auswahl === id) {
+        s7Auswahl = null;
+        station7Markieren();
+        return;
+    }
+
+    const erste = s7Auswahl ? s7Karten.find(k => k.id === s7Auswahl) : null;
+
+    // Noch nichts gewählt oder nochmal dieselbe Sorte: die Auswahl wandert
+    // einfach mit – zwei Zahlen oder zwei Bilder sind kein Fehlversuch.
+    if (!erste || erste.typ === karte.typ) {
+        s7Auswahl = id;
+        station7Markieren();
+        return;
+    }
+
+    if (erste.zahl === karte.zahl) station7Treffer(erste, karte);
+    else station7Fehler(erste, karte);
+}
+
+function station7Treffer(a, b) {
+    a.gepaart = true;
+    b.gepaart = true;
+    s7Auswahl = null;
+    s7Offen--;
+    station7Markieren();
+
+    if (s7Offen === 0) {
+        // letztes Paar: die Runde ist geschafft
+        submitAnswer(true);
+    } else {
+        // Zwischenpaare zählen sofort einen Punkt
+        stationScore++;
+        document.getElementById('stationScore').innerText = stationScore;
+    }
+}
+
+function station7Fehler(a, b) {
+    const bild = (a.typ === 'bild') ? a : b;
+    const z = Math.floor(bild.zahl / 10);
+    const e = bild.zahl % 10;
+
+    [a, b].forEach(k => {
+        const el = document.getElementById('s7' + k.id);
+        if (el) el.classList.add('paar-falsch');
+    });
+
+    // Zu den offenen Bildern die Zahl einblenden – die Lösung steht danach da
+    s7Karten.forEach(k => {
+        if (k.typ !== 'bild' || k.gepaart) return;
+        const el = document.getElementById('s7L' + k.id);
+        if (el) el.textContent = k.zahl;
+    });
+
+    s7Auswahl = null;
+    submitAnswer(false, 'Das Bild zeigt ' + z + ' Zehner und ' + e + ' Einer, also ' + bild.zahl + '.');
+}
+
+/* Auswahl und gefundene Paare auf den Karten anzeigen */
+function station7Markieren() {
+    s7Karten.forEach(karte => {
+        const el = document.getElementById('s7' + karte.id);
+        if (!el) return;
+        el.classList.toggle('gewaehlt', s7Auswahl === karte.id);
+        el.classList.toggle('paar-gefunden', karte.gepaart);
+        el.disabled = karte.gepaart;
+    });
+}
+
+/* ============================================
+   9e. Station 8: Wäscheleine
+   Die Zahlen werden der Größe nach an die Leine gehängt.
+   Die Plätze sind nummeriert, die erste Zahl hängt schon –
+   so ist die Richtung auch ohne Lesen zu erkennen.
+   ============================================ */
+const S8_PLAETZE = 6;
+
+let s8Ziel = [];       // richtige Reihenfolge
+let s8Gehaengt = [];   // schon aufgehängte Zahlen
+let s8Vorrat = [];     // Karten im Korb, feste Reihenfolge
+let s8Dreh = [];       // leichte Drehung je Platz
+
+function station8Aufsteigend() { station8Aufgabe(true); }
+function station8Absteigend()  { station8Aufgabe(false); }
+
+function station8Aufgabe(aufsteigend) {
+    const zahlen = [];
+    while (zahlen.length < S8_PLAETZE) {
+        const zahl = randomInt(11, 99);
+        if (zahlen.indexOf(zahl) === -1) zahlen.push(zahl);
+    }
+
+    s8Ziel = zahlen.slice().sort((a, b) => aufsteigend ? a - b : b - a);
+    s8Gehaengt = s8Ziel.slice(0, 1);          // Orientierungshilfe
+    s8Vorrat = shuffle(s8Ziel.slice(1));
+    s8Dreh = s8Ziel.map(() => randomInt(-30, 30) / 10);
+
+    setInstruction(aufsteigend
+        ? 'Hänge die Zahlen der Größe nach auf. Beginne mit der <strong>kleinsten</strong> Zahl. ⬆️'
+        : 'Hänge die Zahlen der Größe nach auf. Beginne mit der <strong>größten</strong> Zahl. ⬇️');
+
+    station8Zeichnen();
+}
+
+function station8Zeichnen() {
+    const farbe = 'var(--color-' + STATIONS[currentStationIndex].color + ')';
+
+    let plaetze = '';
+    for (let i = 0; i < S8_PLAETZE; i++) {
+        const zahl = s8Gehaengt[i];
+        const istDran = (i === s8Gehaengt.length);
+
+        plaetze += '<div class="leine-platz">' +
+                   '<span class="platz-nr">' + (i + 1) + '</span>';
+
+        if (zahl !== undefined) {
+            plaetze += '<div class="waesche-karte' + (i === 0 ? ' karte-vorgabe' : '') +
+                       '" style="--dreh: ' + s8Dreh[i] + 'deg;">' +
+                       '<span class="klammer"></span>' + zahl + '</div>';
+        } else {
+            plaetze += '<div class="waesche-platzhalter' + (istDran ? ' dran' : '') + '">' +
+                       '<span class="klammer klammer-leer"></span></div>';
+        }
+        plaetze += '</div>';
+    }
+
+    let korb = '';
+    s8Vorrat.forEach(zahl => {
+        const haengt = (s8Gehaengt.indexOf(zahl) !== -1);
+        korb += '<button class="vorrat-karte' + (haengt ? ' karte-verbraucht' : '') + '" ' +
+                'id="s8V' + zahl + '"' + (haengt ? ' disabled' : '') +
+                ' onclick="station8Pick(' + zahl + ')">' + zahl + '</button>';
+    });
+
+    setTaskArea(
+        '<div class="leine-bereich" style="--leine-farbe: ' + farbe + ';">' +
+        '<div class="leine"><div class="leine-seil"></div>' +
+        '<div class="leine-reihe">' + plaetze + '</div></div>' +
+        '<div class="waesche-korb">' + korb + '</div>' +
+        '</div>'
+    );
+}
+
+function station8Pick(zahl) {
+    if (answerLocked) return;
+    if (s8Gehaengt.indexOf(zahl) !== -1) return;
+
+    const erwartet = s8Ziel[s8Gehaengt.length];
+
+    if (zahl !== erwartet) {
+        const karte = document.getElementById('s8V' + zahl);
+        if (karte) karte.classList.add('karte-falsch');
+        submitAnswer(false, 'Die richtige Reihenfolge wäre: ' + s8Ziel.join(' – '));
+        return;
+    }
+
+    s8Gehaengt.push(zahl);
+    station8Zeichnen();
+
+    if (s8Gehaengt.length === S8_PLAETZE) submitAnswer(true);
+}
+
+/* ============================================
    10. Stationen-Registrierung
    Neue Station = hier einen Eintrag ergänzen.
    ============================================ */
@@ -814,10 +1618,18 @@ const STATIONS = [
         emoji: '⚖️',
         color: 'modul2',
         subStations: [
-            { name: 'Größer/Kleiner', newTask: station2Vergleich },
-            { name: 'Kleinste zuerst', newTask: station2OrdnenKleinste },
-            { name: 'Größte zuerst', newTask: station2OrdnenGroesste },
-            { name: 'Zahl einsetzen', newTask: station2ZahlEinsetzen }
+            { name: 'Größer/Kleiner', emoji: '⚖️',
+              hinweis: 'Setze &lt; oder &gt; passend ein.',
+              newTask: station2Vergleich },
+            { name: 'Kleinste zuerst', emoji: '⬆️',
+              hinweis: 'Der Größe nach ordnen – aufsteigend.',
+              newTask: station2OrdnenKleinste },
+            { name: 'Größte zuerst', emoji: '⬇️',
+              hinweis: 'Der Größe nach ordnen – absteigend.',
+              newTask: station2OrdnenGroesste },
+            { name: 'Zahl einsetzen', emoji: '🔍',
+              hinweis: 'Finde eine Zahl, die passt.',
+              newTask: station2ZahlEinsetzen }
         ]
     },
     {
@@ -833,6 +1645,73 @@ const STATIONS = [
         emoji: '➖',
         color: 'modul4',
         newTask: station4NewTask
+    },
+    {
+        name: 'Zahlen hören',
+        title: 'Station 5: Zahlen hören',
+        emoji: '🔊',
+        color: 'modul5',
+        subStations: [
+            { name: 'Zehnerzahlen', emoji: '🔟',
+              hinweis: '10, 20, 30 … hören und eintippen.',
+              newTask: station5Zehner },
+            { name: 'Bis 100', emoji: '🔢',
+              hinweis: 'Jede Zahl bis 100 hören und eintippen.',
+              newTask: station5Bis100 },
+            { name: 'Bild finden', emoji: '🧱',
+              hinweis: 'Zur gehörten Zahl das passende Bild antippen.',
+              newTask: station5Bild }
+        ]
+    },
+    {
+        name: 'Zahlwörter bauen',
+        title: 'Station 6: Zahlwörter bauen',
+        emoji: '🔤',
+        color: 'modul6',
+        newTask: station6NewTask
+    },
+    {
+        name: 'Paare finden',
+        title: 'Station 7: Paare finden',
+        emoji: '🃏',
+        color: 'modul7',
+        newTask: station7NewTask
+    },
+    {
+        name: 'Wäscheleine',
+        title: 'Station 8: Wäscheleine',
+        emoji: '🧺',
+        color: 'modul8',
+        subStations: [
+            { name: 'Kleinste zuerst', emoji: '⬆️',
+              hinweis: 'Die Zahlen aufsteigend aufhängen.',
+              newTask: station8Aufsteigend },
+            { name: 'Größte zuerst', emoji: '⬇️',
+              hinweis: 'Die Zahlen absteigend aufhängen.',
+              newTask: station8Absteigend }
+        ]
+    }
+];
+
+/* ============================================
+   11. Bereiche
+   Die Stationen sind in zwei Themenbereiche gegliedert.
+   Neuer Bereich = hier einen Eintrag ergänzen.
+   ============================================ */
+const BEREICHE = [
+    {
+        name: 'Zehnerzahlen',
+        emoji: '🔟',
+        color: 'modul1',
+        hinweis: '10, 20, 30 … – finden, ordnen und rechnen.',
+        stationen: [0, 1, 2, 3]
+    },
+    {
+        name: 'Zehner und Einer',
+        emoji: '🔢',
+        color: 'modul5',
+        hinweis: 'Alle Zahlen bis 100 – hören, bauen und zuordnen.',
+        stationen: [4, 5, 6, 7]
     }
 ];
 

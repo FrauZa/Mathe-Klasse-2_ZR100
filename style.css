@@ -18,6 +18,22 @@
     --color-modul4: #9C27B0;
     --color-modul4-light: #E1BEE7;
 
+    /* Farben für Modul 5 */
+    --color-modul5: #26A69A;
+    --color-modul5-light: #80CBC4;
+
+    /* Farben für Modul 6 */
+    --color-modul6: #EC407A;
+    --color-modul6-light: #F8BBD0;
+
+    /* Farben für Modul 7 */
+    --color-modul7: #5C6BC0;
+    --color-modul7-light: #C5CAE9;
+
+    /* Farben für Modul 8 */
+    --color-modul8: #8D6E63;
+    --color-modul8-light: #D7CCC8;
+
     --color-text: #333;
     --color-bg: #f5f5f5;
     --color-white: #ffffff;
@@ -114,6 +130,8 @@ body {
 
 .operation-btn {
     min-height: 180px;
+    /* Innenabstand, damit mehrzeilige Hinweise nicht am Rand kleben */
+    padding: 22px 18px;
     border: none;
     border-radius: 25px;
     font-size: 1.4rem;
@@ -135,13 +153,18 @@ body {
 .operation-btn.modul2 { background: linear-gradient(135deg, var(--color-modul2) 0%, var(--color-modul2-light) 100%); }
 .operation-btn.modul3 { background: linear-gradient(135deg, var(--color-modul3) 0%, var(--color-modul3-light) 100%); }
 .operation-btn.modul4 { background: linear-gradient(135deg, var(--color-modul4) 0%, var(--color-modul4-light) 100%); }
+.operation-btn.modul5 { background: linear-gradient(135deg, var(--color-modul5) 0%, var(--color-modul5-light) 100%); }
+.operation-btn.modul6 { background: linear-gradient(135deg, var(--color-modul6) 0%, var(--color-modul6-light) 100%); }
+.operation-btn.modul7 { background: linear-gradient(135deg, var(--color-modul7) 0%, var(--color-modul7-light) 100%); }
+.operation-btn.modul8 { background: linear-gradient(135deg, var(--color-modul8) 0%, var(--color-modul8-light) 100%); }
 
 .operation-btn .emoji { font-size: 3.5rem; }
 .operation-btn .hinweis {
     font-size: 0.95rem;
     font-weight: 400;
+    line-height: 1.3;
     opacity: 0.9;
-    margin-top: 4px;
+    margin-top: -6px;
 }
 .operation-btn:hover { transform: translateY(-5px) scale(1.05); box-shadow: var(--shadow-hover); }
 
@@ -153,6 +176,42 @@ body {
     border-radius: 20px;
     padding: 40px;
     box-shadow: var(--shadow);
+}
+
+/* Auswahl-Bildschirme (Bereich, Unterkategorie und Übungsmodus):
+   Titel und Frage stehen sonst direkt auf dem Hintergrundfoto und
+   sind dort kaum zu lesen. */
+#bereichScreen .content,
+#subScreen .content,
+#modeScreen .content {
+    background: var(--color-white);
+    border-radius: 20px;
+    padding: 30px 20px;
+    box-shadow: var(--shadow);
+}
+
+/* Tab-Reihen der Stationen und Unterstationen */
+.tabs-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    justify-content: center;
+    width: 100%;
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #888;
+}
+
+/* Sternenreihe: umbrechbar, damit sie mit vielen Stationen die
+   Seite nicht in die Breite zieht. */
+.stars-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    font-size: 2.5rem;
+    line-height: 1;
+    color: #ccc;
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .header {
@@ -247,6 +306,16 @@ body {
     .exercise-screen .content { padding: 25px; }
     .button-area { flex-direction: column; }
     .check-btn, .next-btn { width: 100%; }
+    .stars-container { font-size: 1.5rem; }
+    /* Bei vielen Stationen würden die Tabs sonst den halben Bildschirm
+       füllen – hier eine Zeile, die sich seitwärts schieben lässt. */
+    .tabs-container {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        justify-content: flex-start;
+        padding-bottom: 4px;
+    }
+    .tabs-container .tab { flex: 0 0 auto; }
 }
 .option-btn {
     min-width: 65px;
@@ -381,6 +450,580 @@ body {
 }
 #stationOptions.modul4-opts .option-btn:active:not(:disabled) {
     box-shadow: 0 0 0 var(--color-modul4);
+}
+
+.modul5-color { color: var(--color-modul5); }
+.check-btn.modul5-color, .next-btn.modul5-color {
+    background: var(--color-modul5);
+}
+#stationOptions.modul5-opts .option-btn {
+    background-color: var(--color-modul5-light);
+    box-shadow: 0 5px 0 var(--color-modul5);
+}
+#stationOptions.modul5-opts .option-btn:active:not(:disabled) {
+    box-shadow: 0 0 0 var(--color-modul5);
+}
+
+.modul6-color { color: var(--color-modul6); }
+.check-btn.modul6-color, .next-btn.modul6-color {
+    background: var(--color-modul6);
+}
+#stationOptions.modul6-opts .option-btn {
+    background-color: var(--color-modul6-light);
+    box-shadow: 0 5px 0 var(--color-modul6);
+}
+#stationOptions.modul6-opts .option-btn:active:not(:disabled) {
+    box-shadow: 0 0 0 var(--color-modul6);
+}
+
+.modul7-color { color: var(--color-modul7); }
+.check-btn.modul7-color, .next-btn.modul7-color {
+    background: var(--color-modul7);
+}
+#stationOptions.modul7-opts .option-btn {
+    background-color: var(--color-modul7-light);
+    box-shadow: 0 5px 0 var(--color-modul7);
+}
+#stationOptions.modul7-opts .option-btn:active:not(:disabled) {
+    box-shadow: 0 0 0 var(--color-modul7);
+}
+
+.modul8-color { color: var(--color-modul8); }
+.check-btn.modul8-color, .next-btn.modul8-color {
+    background: var(--color-modul8);
+}
+#stationOptions.modul8-opts .option-btn {
+    background-color: var(--color-modul8-light);
+    box-shadow: 0 5px 0 var(--color-modul8);
+}
+#stationOptions.modul8-opts .option-btn:active:not(:disabled) {
+    box-shadow: 0 0 0 var(--color-modul8);
+}
+
+/* ============================================
+   Station 5: Zahlen hören
+   ============================================ */
+.hoer-bereich {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    margin-top: 20px;
+}
+
+/* Großer Lautsprecher-Knopf zum Wiederholen */
+.hoer-btn {
+    padding: 18px 34px;
+    font-family: inherit;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #fff;
+    background: var(--hoer-farbe);
+    border: none;
+    border-radius: 16px;
+    box-shadow: 0 5px 0 rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+.hoer-btn:active {
+    transform: translateY(5px);
+    box-shadow: 0 0 0 rgba(0, 0, 0, 0.2);
+}
+
+/* Fällt die Sprachausgabe aus, steht das Zahlwort geschrieben da */
+.hoer-ersatz {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--hoer-farbe);
+}
+
+/* Feld mit der eingetippten Zahl (schlägt die Maße von .zahl-karte) */
+.zahl-karte.hoer-anzeige {
+    min-width: 150px;
+    height: 90px;
+    font-size: 3rem;
+    letter-spacing: 4px;
+}
+
+/* Zifferntastenfeld: 1–9, dann Löschen und 0 */
+.tastenfeld {
+    display: grid;
+    grid-template-columns: repeat(3, 82px);
+    gap: 12px;
+    justify-content: center;
+}
+
+.taste {
+    height: 72px;
+    font-family: inherit;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--color-text);
+    background: #fff;
+    border: 3px solid var(--hoer-farbe);
+    border-radius: 14px;
+    box-shadow: 0 5px 0 var(--hoer-farbe);
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+.taste:active:not(:disabled) {
+    transform: translateY(5px);
+    box-shadow: 0 0 0 var(--hoer-farbe);
+}
+.taste:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.taste-loeschen {
+    color: var(--hoer-farbe);
+}
+
+/* Gesperrter Fertig-Knopf, solange nichts eingetippt ist */
+.check-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* Richtig gelöst: die Zahl leuchtet kurz grün auf, bevor die
+   nächste Zahl angesagt wird. */
+@keyframes zahl-leuchtet {
+    0%   { transform: scale(1);    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
+    30%  { transform: scale(1.09); box-shadow: 0 0 30px 8px rgba(76, 175, 80, 0.9); }
+    60%  { transform: scale(1);    box-shadow: 0 0 14px 3px rgba(76, 175, 80, 0.5); }
+    80%  { transform: scale(1.04); box-shadow: 0 0 26px 6px rgba(76, 175, 80, 0.8); }
+    100% { transform: scale(1);    box-shadow: 0 0 14px 3px rgba(76, 175, 80, 0.45); }
+}
+
+.leuchtet {
+    animation: zahl-leuchtet 1.2s ease-out forwards;
+}
+
+/* Ohne Animation (Systemeinstellung) bleibt der grüne Schein stehen */
+@media (prefers-reduced-motion: reduce) {
+    .leuchtet {
+        animation: none;
+        box-shadow: 0 0 14px 3px rgba(76, 175, 80, 0.5);
+    }
+}
+
+/* ============================================
+   Station 8: Wäscheleine
+   Ein Seil, nummerierte Plätze, darunter der Wäschekorb
+   ============================================ */
+.leine-bereich { padding: 10px 0 5px; }
+
+.leine { position: relative; }
+
+/* Das Seil läuft hinter den Karten durch */
+.leine-seil {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 14px;
+    height: 4px;
+    background: #A1887F;
+    border-radius: 2px;
+}
+
+.leine-reihe {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.leine-platz {
+    position: relative;
+    padding-top: 24px;
+}
+
+/* Nummer des Platzes, wie ein kleines Schildchen an der Karte */
+.platz-nr {
+    position: absolute;
+    top: 16px;
+    left: -6px;
+    z-index: 2;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #B0BEC5;
+    color: #546E7A;
+    font-size: 0.85rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Wäscheklammer – sie greift über das Seil */
+.klammer {
+    position: absolute;
+    top: -16px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 13px;
+    height: 26px;
+    border-radius: 4px;
+    background: #42A5F5;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.klammer-leer { background: #CFD8DC; }
+
+.waesche-karte {
+    position: relative;
+    width: 78px;
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-text);
+    transform: rotate(var(--dreh, 0deg));
+}
+/* Die vorgegebene erste Zahl zeigt die Richtung an */
+.waesche-karte.karte-vorgabe {
+    background: #E3F2FD;
+    color: var(--color-modul2);
+}
+
+.waesche-platzhalter {
+    position: relative;
+    width: 78px;
+    min-height: 60px;
+    border: 3px dashed #CFD8DC;
+    border-radius: 10px;
+}
+/* Hier gehört die nächste Zahl hin */
+.waesche-platzhalter.dran {
+    border-color: var(--leine-farbe);
+    background: rgba(141, 110, 99, 0.09);
+}
+
+/* Wäschekorb: die Zahlen, die noch aufgehängt werden */
+.waesche-korb {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 35px;
+}
+
+.vorrat-karte {
+    width: 78px;
+    min-height: 58px;
+    background: #fff;
+    border: 3px solid var(--leine-farbe);
+    border-radius: 10px;
+    box-shadow: 0 4px 0 var(--leine-farbe);
+    font-family: inherit;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-text);
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+.vorrat-karte:active:not(:disabled) {
+    transform: translateY(4px);
+    box-shadow: 0 0 0 var(--leine-farbe);
+}
+.vorrat-karte.karte-verbraucht {
+    opacity: 0.3;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+.vorrat-karte.karte-falsch {
+    background: #ffcdd2;
+    border-color: #c62828;
+    box-shadow: 0 4px 0 #c62828;
+}
+
+/* ============================================
+   Station 7: Paare finden
+   Karten liegen leicht gedreht auf dem Tisch: Zahlenkarten
+   mit blauem Punkt, Bildkarten mit orangem Punkt.
+   ============================================ */
+.paar-feld {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 18px;
+    padding: 15px 5px;
+}
+
+.paar-karte {
+    position: relative;
+    width: 150px;
+    min-height: 108px;
+    /* unten Platz für die Zahl, die nach einem Fehlversuch erscheint */
+    padding: 20px 10px 24px;
+    background: #fff;
+    border: none;
+    border-radius: 14px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+    font-family: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: rotate(var(--dreh, 0deg));
+    transition: transform 0.15s, box-shadow 0.15s, background-color 0.15s;
+}
+.paar-karte:hover:not(:disabled) {
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.26);
+}
+
+/* angetippt und wartet auf den Partner */
+.paar-karte.gewaehlt {
+    transform: rotate(var(--dreh, 0deg)) scale(1.07);
+    box-shadow: 0 0 0 4px var(--paar-farbe), 0 8px 18px rgba(0, 0, 0, 0.26);
+}
+.paar-karte.paar-gefunden {
+    background-color: #c8e6c9;
+    box-shadow: 0 0 0 3px #2e7d32;
+    cursor: default;
+}
+.paar-karte.paar-falsch {
+    background-color: #ffcdd2;
+    box-shadow: 0 0 0 3px #c62828;
+}
+
+/* Der farbige Punkt in der Ecke – blau = Zahl, orange = Bild */
+.paar-punkt {
+    position: absolute;
+    top: 8px;
+    left: 10px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+}
+.paar-karte.paar-zahl .paar-punkt { background: #42A5F5; }
+.paar-karte.paar-bild .paar-punkt { background: #FB8C00; }
+
+.paar-wert {
+    font-size: 2.1rem;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+/* Nach einem Fehlversuch: die Zahl unter dem Bild */
+.paar-loesung {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 3px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--color-modul2);
+}
+
+/* Strichbild: ein Strich = ein Zehner, ein Punkt = ein Einer */
+.strichbild {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+.punkt-gruppe {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+/* Zwischen den Fünferbündeln ist mehr Luft als zwischen den Strichen */
+.strich-gruppe {
+    display: flex;
+    align-items: flex-start;
+    gap: 13px;
+}
+.strich-buendel {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+.zehner-strich {
+    display: block;
+    width: 4px;
+    height: 58px;
+    background: #263238;
+    border-radius: 2px;
+}
+
+/* Der fünfte Strich liegt quer über den vier davor */
+.quer-strich {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 4px;
+    height: 66px;
+    background: #263238;
+    border-radius: 2px;
+    transform: translate(-50%, -50%) rotate(32deg);
+}
+/* Fünf Punkte sind genauso hoch wie ein Zehnerstrich –
+   so bleibt der Vergleich Zehner/Einer stimmig. */
+.punkt-spalte {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.einer-punkt {
+    display: block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #263238;
+}
+
+/* ============================================
+   Station 6: Zahlwörter bauen
+   Links die Einer, in der Mitte "und", rechts die Zehner
+   ============================================ */
+.zahl-gross {
+    text-align: center;
+    font-size: 4rem;
+    font-weight: 700;
+    color: var(--color-text);
+    margin-bottom: 15px;
+}
+
+.wortbau {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+}
+
+.wort-spalte {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.wort-btn {
+    min-width: 150px;
+    padding: 10px 14px;
+    font-family: inherit;
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--color-text);
+    background-color: #fff;
+    border: 3px solid var(--wort-farbe);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+}
+.wort-btn:hover:not(:disabled) { background-color: #FCE4EC; }
+.wort-btn:disabled { cursor: not-allowed; }
+
+/* angeklickt */
+.wort-btn.gewaehlt {
+    background-color: var(--wort-farbe);
+    border-color: var(--wort-farbe);
+    color: #fff;
+}
+/* nach der Antwort */
+.wort-btn.wort-richtig {
+    background-color: #c8e6c9;
+    border-color: #2e7d32;
+    color: #1b5e20;
+}
+.wort-btn.wort-falsch {
+    background-color: #ffcdd2;
+    border-color: #c62828;
+    color: #b71c1c;
+}
+
+.wort-und {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #78909C;
+}
+
+/* Zeile, in der das Zahlwort entsteht */
+.wort-ergebnis {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 62px;
+    margin: 20px auto 0;
+    padding: 8px 18px;
+    border-radius: 14px;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--color-text);
+}
+.wort-ergebnis.ergebnis-richtig {
+    background: #c8e6c9;
+    color: #1b5e20;
+}
+.wort-ergebnis.ergebnis-loesung {
+    background: #E3F2FD;
+    color: var(--color-modul2);
+}
+.wort-teil-und { color: #78909C; font-weight: 600; }
+.wort-teil.offen { color: #B0BEC5; }
+
+.wortbau-bereich { text-align: center; }
+
+/* ---- Zahlbild: Zehnerstangen + Einerwürfel (Bild finden) ---- */
+.zahlbild {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 10px;
+}
+
+/* Die Stangen kleiner als in Station 1, damit vier Bilder nebeneinander passen */
+.zahlbild .zs-reihe {
+    min-height: 0;
+    padding: 0;
+    gap: 4px;
+    flex-wrap: nowrap;
+}
+.zahlbild .zehnerstange { width: 14px; border-width: 1.5px; }
+.zahlbild .zehnerstange .zs-feld { height: 10px; }
+.zahlbild .zs-nach-luecke { margin-left: 9px; }
+
+/* Einer in Fünferspalten – gleich hoch wie ein Feld der Stange */
+.einer-block {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+}
+.einer-spalte {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 2px;
+}
+.einer-wuerfel {
+    display: block;
+    width: 14px;
+    height: 10px;
+    background: #FB8C00;
+    border: 1.5px solid #E65100;
+    border-radius: 3px;
+}
+
+/* Antwortkarten mit Bildern statt Zahlen */
+#stationOptions.bild-opts .option-btn {
+    height: auto;
+    min-width: 0;
+    padding: 14px 12px;
+    background-color: #fff;
+    /* Rand, damit die vier Bilder klar voneinander getrennt sind */
+    border: 3px solid var(--color-modul5-light);
+    box-shadow: 0 5px 0 var(--color-modul5);
+}
+#stationOptions.bild-opts .option-btn:active:not(:disabled) {
+    box-shadow: 0 0 0 var(--color-modul5);
 }
 
 /* ============================================
@@ -710,4 +1353,47 @@ body {
     .rechen-aufgabe { font-size: 1.7rem; }
     .rechen-aufgabe.gross { font-size: 2.2rem; }
     .zuordnen-karte { font-size: 2rem; min-width: 160px; }
+    .zahl-karte.hoer-anzeige { min-width: 120px; height: 76px; font-size: 2.4rem; }
+    .tastenfeld { grid-template-columns: repeat(3, 72px); gap: 10px; }
+    .taste { height: 64px; font-size: 1.7rem; }
+    .hoer-btn { font-size: 1.2rem; padding: 15px 26px; }
+    .zahlbild { gap: 7px; }
+    .zahlbild .zs-reihe { gap: 3px; }
+    .zahlbild .zehnerstange { width: 10px; }
+    .zahlbild .zehnerstange .zs-feld { height: 8px; }
+    .zahlbild .zs-nach-luecke { margin-left: 7px; }
+    .einer-wuerfel { width: 10px; height: 8px; }
+    .einer-block { gap: 3px; }
+    #stationOptions.bild-opts .option-btn { padding: 10px 8px; }
+    .zahl-gross { font-size: 3rem; }
+    .wortbau { gap: 8px; }
+    .wort-btn { min-width: 0; padding: 9px 8px; font-size: 1.05rem; }
+    .wort-und { font-size: 1.1rem; }
+    .wort-ergebnis { font-size: 1.35rem; min-height: 52px; padding: 6px 12px; }
+    .paar-feld { gap: 12px; }
+    .paar-karte { width: 104px; min-height: 88px; padding: 18px 6px 22px; }
+    .paar-wert { font-size: 1.7rem; }
+    .zehner-strich { width: 3px; height: 46px; }
+    .punkt-gruppe { gap: 4px; }
+    .strich-gruppe { gap: 10px; }
+    .strich-buendel { gap: 4px; }
+    .quer-strich { width: 3px; height: 54px; }
+    .strichbild { gap: 7px; }
+    .einer-punkt { width: 8px; height: 8px; }
+    .punkt-spalte { gap: 2px; }
+    .leine-reihe { gap: 6px; }
+    .waesche-karte, .waesche-platzhalter, .vorrat-karte { width: 50px; min-height: 48px; font-size: 1.15rem; }
+    .platz-nr { width: 20px; height: 20px; font-size: 0.75rem; left: -4px; }
+    .klammer { width: 10px; height: 22px; top: -14px; }
+    .waesche-korb { gap: 8px; margin-top: 28px; }
+}
+
+/* Sehr schmale Handys: die sechs Plätze müssen nebeneinander passen */
+@media (max-width: 480px) {
+    .leine-reihe { gap: 3px; }
+    .waesche-karte, .waesche-platzhalter { width: 40px; min-height: 44px; }
+    .waesche-karte { font-size: 1rem; }
+    .platz-nr { width: 17px; height: 17px; font-size: 0.65rem; left: -3px; top: 18px; }
+    .klammer { width: 8px; height: 18px; top: -12px; }
+    .vorrat-karte { width: 56px; min-height: 50px; font-size: 1.2rem; }
 }
