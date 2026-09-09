@@ -1033,8 +1033,7 @@ function station5LangsamHTML(farbe) {
 }
 
 /* ---- Die Unterstationen ------------------------------------------ */
-function station5Zehner()  { station5Aufgabe(10, 100, true); }
-function station5Bis100()  { station5Aufgabe(1, 100, false); }
+function station5Bis100()  { station5Aufgabe(1, 100); }
 
 /* Einstellige Zahlen kommen nur selten dran – gehört und getippt werden
    sollen vor allem die zweistelligen Zahlen. */
@@ -1043,8 +1042,8 @@ function station5Zufallszahl(min, max) {
     return randomInt(min, max);
 }
 
-function station5Aufgabe(min, max, nurZehner) {
-    s5Zahl = nurZehner ? randomInt(min / 10, max / 10) * 10 : station5Zufallszahl(min, max);
+function station5Aufgabe(min, max) {
+    s5Zahl = station5Zufallszahl(min, max);
     s5Eingabe = '';
 
     setInstruction('Höre gut zu und tippe die Zahl ein.');
@@ -1272,6 +1271,9 @@ if (spracheVerfuegbar() && typeof window.speechSynthesis.addEventListener === 'f
 let s6Zahl = 0;
 let s6Einer = null;    // angeklickte Einerzahl (1–9)
 let s6Zehner = null;   // angeklickte Zehnerzahl (10–90)
+/* Das "und" wird mitgeklickt: es gehört zum Zahlwort dazu und stand
+   vorher nur als Deko zwischen den Spalten. */
+let s6Und = false;
 
 function station6NewTask() {
     // Ab 20: elf, zwölf, dreizehn … sind Sonderformen und lassen sich
@@ -1282,8 +1284,9 @@ function station6NewTask() {
     s6Zahl = z * 10 + e;
     s6Einer = null;
     s6Zehner = null;
+    s6Und = false;
 
-    setInstruction('Aus welchen Wörtern besteht die Zahl? Klicke beide an.');
+    setInstruction('Aus welchen Wörtern besteht die Zahl? Klicke alle drei an.');
 
     const farbe = 'var(--color-' + STATIONS[currentStationIndex].color + ')';
 
@@ -1307,7 +1310,8 @@ function station6NewTask() {
         '<div class="wortbau-bereich" style="--wort-farbe: ' + farbe + ';">' +
         '<div class="zahl-gross">' + s6Zahl + '</div>' +
         '<div class="wortbau">' + einerSpalte +
-        '<div class="wort-und">und</div>' + zehnerSpalte + '</div>' +
+        '<button class="wort-btn wort-und" id="s6Und" onclick="station6Waehle(\'und\')">und</button>' +
+        zehnerSpalte + '</div>' +
         '<div class="wort-ergebnis" id="s6Ergebnis"></div>' +
         '</div>'
     );
@@ -1319,12 +1323,13 @@ function station6Waehle(spalte, wert) {
     if (answerLocked) return;
 
     if (spalte === 'einer') s6Einer = wert;
-    else s6Zehner = wert;
+    else if (spalte === 'zehner') s6Zehner = wert;
+    else s6Und = true;
 
     station6Markieren();
 
-    // Sobald beide Bausteine stehen, wird von selbst geprüft
-    if (s6Einer !== null && s6Zehner !== null) {
+    // Sobald alle drei Bausteine stehen, wird von selbst geprüft
+    if (s6Einer !== null && s6Zehner !== null && s6Und) {
         const stand = s6Einer + '-' + s6Zehner;
         setTimeout(() => {
             if (!answerLocked && (s6Einer + '-' + s6Zehner) === stand) station6Pruefen();
@@ -1341,6 +1346,9 @@ function station6Markieren() {
         if (zBtn) zBtn.classList.toggle('gewaehlt', s6Zehner === i * 10);
     }
 
+    const uBtn = document.getElementById('s6Und');
+    if (uBtn) uBtn.classList.toggle('gewaehlt', s6Und);
+
     const zeile = document.getElementById('s6Ergebnis');
     if (!zeile) return;
 
@@ -1349,12 +1357,13 @@ function station6Markieren() {
         : '<span class="wort-teil offen">?</span>';
 
     zeile.innerHTML = teil(s6Einer ? einerBaustein(s6Einer) : null) +
-                      '<span class="wort-teil-und">und</span>' +
+                      (s6Und ? '<span class="wort-teil-und">und</span>'
+                             : '<span class="wort-teil offen">?</span>') +
                       teil(s6Zehner ? ZAHLWORTE[s6Zehner] : null);
 }
 
 function station6Pruefen() {
-    if (answerLocked || s6Einer === null || s6Zehner === null) return;
+    if (answerLocked || s6Einer === null || s6Zehner === null || !s6Und) return;
 
     const ok = (s6Zehner + s6Einer === s6Zahl);
     const richtigE = s6Zahl % 10;
@@ -1375,6 +1384,10 @@ function station6Pruefen() {
             else if (i * 10 === s6Zehner) zBtn.classList.add('wort-falsch');
         }
     }
+
+    // Das "und" steht in jedem Zahlwort - es ist immer richtig
+    const uBtn = document.getElementById('s6Und');
+    if (uBtn) { uBtn.disabled = true; uBtn.classList.add('wort-richtig'); }
 
     // Das vollständige Zahlwort steht danach einmal komplett da
     const zeile = document.getElementById('s6Ergebnis');
@@ -1550,54 +1563,244 @@ function station7Markieren() {
 }
 
 /* ============================================
-   9e. Station 8: Wäscheleine
+   9e. Station 8: Zahlen zerlegen
+   Zwei Zahlenkarten wie im Heft: blau die Zehner, rot die Einer.
+   Darunter die Gleichung 84 = 80 + 4 mit drei Lücken.
+   Das Kind legt die Karten der Reihe nach hinein - so entsteht
+   die Zerlegung Schritt für Schritt und nicht als fertiger Satz.
+   ============================================ */
+let s8Zahl = 0;
+let s8Ziele = [];    // die drei richtigen Werte: Zahl, Zehner, Einer
+let s8Schritt = 0;   // welche Lücke als nächste dran ist
+
+/* Die Auswahlkarten: die drei richtigen Zahlen und daneben genau die
+   Verwechslungen, um die es geht - vertauschte Ziffern (48), der
+   Zehner als bloße Ziffer (8), der Einer als Zehner (40). */
+function station8Karten(z, e) {
+    const karten = s8Ziele.slice();
+    const kandidaten = [e * 10 + z, z, e * 10, z * 10 + (e < 9 ? e + 1 : e - 1)];
+
+    kandidaten.forEach(k => {
+        if (karten.length < 6 && k > 0 && karten.indexOf(k) === -1) karten.push(k);
+    });
+    return shuffle(karten);
+}
+
+function station8NewTask() {
+    const z = randomInt(1, 9);
+    const e = randomInt(1, 9);   // ohne Null: sonst hieße die Aufgabe 80 = 80 + 0
+
+    s8Zahl = z * 10 + e;
+    s8Ziele = [s8Zahl, z * 10, e];
+    s8Schritt = 0;
+
+    setInstruction('Zerlege die Zahl: erst die ganze Zahl, dann die Zehner, dann die Einer.');
+
+    const karten = station8Karten(z, e).map(wert =>
+        '<button class="zahl-karte klickbar" id="s8K' + wert + '" ' +
+        'onclick="station8Pick(' + wert + ', this)">' + wert + '</button>').join('');
+
+    setTaskArea(
+        '<div class="zerlegen-bereich" style="--karte-farbe: var(--color-' +
+        STATIONS[currentStationIndex].color + ');">' +
+
+        /* Die Zehnerkarte trägt die ganze Zehnerzahl und ist darum doppelt
+           so lang wie die Einerkarte. Die Einerkarte liegt genau auf der
+           Null - dass dort eine Zehnerzahl steht, soll das Kind selbst
+           herausfinden, nicht ablesen. */
+        '<div class="stellenkarten">' +
+        '<span class="stellenkarte zehner">' +
+        '<span class="stelle">' + z + '</span><span class="stelle">0</span>' +
+        '</span>' +
+        '<span class="stellenkarte einer">' + e + '</span>' +
+        '</div>' +
+
+        '<div class="zerlegen-gleichung">' +
+        '<span class="zahl-karte luecke dran" id="s8L0">?</span>' +
+        '<span class="zerlegen-zeichen">=</span>' +
+        '<span class="zahl-karte luecke" id="s8L1">?</span>' +
+        '<span class="zerlegen-zeichen">+</span>' +
+        '<span class="zahl-karte luecke" id="s8L2">?</span>' +
+        '</div>' +
+
+        '<div class="zerlegen-karten">' + karten + '</div>' +
+        // Hilfe: dieselbe Zahl als Zehnerstangen und Einerwürfel
+        rechenHilfeHTML(zahlbildHTML(s8Zahl)) +
+        '</div>'
+    );
+}
+
+/* Die nächste offene Lücke hervorheben - das Kind sieht, wo es
+   weitergeht, ohne die Anweisung noch einmal zu lesen. */
+function station8Markieren() {
+    for (let i = 0; i < 3; i++) {
+        const el = document.getElementById('s8L' + i);
+        if (el) el.classList.toggle('dran', i === s8Schritt);
+    }
+}
+
+function station8Pick(wert, btn) {
+    if (answerLocked) return;
+
+    if (wert !== s8Ziele[s8Schritt]) {
+        btn.classList.add('karte-falsch');
+        // Die vollständige Zerlegung steht danach einmal komplett da
+        for (let i = s8Schritt; i < 3; i++) fillLuecke('s8L' + i, s8Ziele[i], false);
+        station8Markieren();
+        submitAnswer(false, s8Zahl + ' = ' + s8Ziele[1] + ' + ' + s8Ziele[2] +
+                            '. Die blaue Karte sind die Zehner, die rote die Einer.');
+        return;
+    }
+
+    fillLuecke('s8L' + s8Schritt, wert, true);
+    btn.disabled = true;
+    btn.classList.add('karte-verbraucht');
+
+    s8Schritt++;
+    station8Markieren();
+
+    if (s8Schritt === 3) submitAnswer(true);
+}
+
+/* ============================================
+   9f. Station 9: Zahlen vergleichen
+   Zwischen zwei Zahlen fehlt das Zeichen < = >.
+   Die Paare sind bewusst gemischt: mal entscheiden die Zehner,
+   mal die Einer – und immer wieder kommt die Falle, bei der die
+   kleinere Zahl die größeren Einer hat (38 < 41).
+   ============================================ */
+let s9Links = 0;
+let s9Rechts = 0;
+
+/* Liefert zwei Zahlen bis 100. Reiner Zufall brächte fast nur
+   Aufgaben, bei denen schon die Zehner alles entscheiden – die
+   lehrreichen Fälle müssen deshalb absichtlich vorkommen. */
+function station9Paar() {
+    const art = randomInt(1, 10);
+
+    // Gleiche Zehner: jetzt entscheiden die Einer (43 – 47)
+    if (art <= 3) {
+        const z = randomInt(1, 9);
+        const e1 = randomInt(0, 9);
+        let e2 = randomInt(0, 9);
+        while (e2 === e1) e2 = randomInt(0, 9);
+        return [z * 10 + e1, z * 10 + e2];
+    }
+
+    // Die Falle: die kleinere Zahl hat die größeren Einer (38 – 41)
+    if (art <= 6) {
+        const z = randomInt(1, 8);
+        return [z * 10 + randomInt(5, 9), (z + 1) * 10 + randomInt(0, 4)];
+    }
+
+    // Zwei gleiche Zahlen, damit das = nicht nur Deko ist
+    if (art === 7) {
+        const zahl = randomInt(11, 99);
+        return [zahl, zahl];
+    }
+
+    let a = randomInt(11, 99);
+    let b = randomInt(11, 99);
+    while (b === a) b = randomInt(11, 99);
+    return [a, b];
+}
+
+function station9NewTask() {
+    const paar = shuffle(station9Paar());
+    s9Links = paar[0];
+    s9Rechts = paar[1];
+
+    const richtig = (s9Links < s9Rechts) ? '<' : (s9Links > s9Rechts) ? '>' : '=';
+
+    setInstruction('Welches Zeichen passt zwischen die beiden Zahlen?');
+
+    setTaskArea(
+        '<div class="vergleich-aufgabe">' +
+        '<span class="zahl-karte">' + s9Links + '</span>' +
+        '<span class="zahl-karte luecke" id="s9Zeichen">?</span>' +
+        '<span class="zahl-karte">' + s9Rechts + '</span>' +
+        '</div>' +
+        // Hilfe: beide Zahlen als Zehnerstangen nebeneinander
+        rechenHilfeHTML(
+            '<div class="vergleich-bilder">' +
+            '<div class="vergleich-bild">' + zahlbildHTML(s9Links) + '</div>' +
+            '<div class="vergleich-bild">' + zahlbildHTML(s9Rechts) + '</div>' +
+            '</div>')
+    );
+
+    renderOptions(['<', '=', '>'], richtig, null,
+        'Vergleiche zuerst die Zehner. Sind sie gleich, entscheiden die Einer. ' +
+        'Die offene Seite zeigt zur größeren Zahl.',
+        // Zeichen einblenden: die Aussage steht danach komplett da
+        (wert, ok) => fillLuecke('s9Zeichen', richtig, ok));
+}
+
+/* ============================================
+   9g. Station 10: Wäscheleine
    Die Zahlen werden der Größe nach an die Leine gehängt.
    Die Plätze sind nummeriert, die erste Zahl hängt schon –
    so ist die Richtung auch ohne Lesen zu erkennen.
    ============================================ */
-const S8_PLAETZE = 6;
+const S10_PLAETZE = 6;
 
-let s8Ziel = [];       // richtige Reihenfolge
-let s8Gehaengt = [];   // schon aufgehängte Zahlen
-let s8Vorrat = [];     // Karten im Korb, feste Reihenfolge
-let s8Dreh = [];       // leichte Drehung je Platz
+let s10Ziel = [];       // richtige Reihenfolge
+let s10Gehaengt = [];   // schon aufgehängte Zahlen
+let s10Vorrat = [];     // Karten im Korb, feste Reihenfolge
+let s10Dreh = [];       // leichte Drehung je Platz
+let s10Aufsteigend = true;
 
-function station8Aufsteigend() { station8Aufgabe(true); }
-function station8Absteigend()  { station8Aufgabe(false); }
+function station10Aufsteigend() { station10Aufgabe(true); }
+function station10Absteigend()  { station10Aufgabe(false); }
 
-function station8Aufgabe(aufsteigend) {
+function station10Aufgabe(aufsteigend) {
+    s10Aufsteigend = aufsteigend;
+
     const zahlen = [];
-    while (zahlen.length < S8_PLAETZE) {
+    while (zahlen.length < S10_PLAETZE) {
         const zahl = randomInt(11, 99);
         if (zahlen.indexOf(zahl) === -1) zahlen.push(zahl);
     }
 
-    s8Ziel = zahlen.slice().sort((a, b) => aufsteigend ? a - b : b - a);
-    s8Gehaengt = s8Ziel.slice(0, 1);          // Orientierungshilfe
-    s8Vorrat = shuffle(s8Ziel.slice(1));
-    s8Dreh = s8Ziel.map(() => randomInt(-30, 30) / 10);
+    s10Ziel = zahlen.slice().sort((a, b) => aufsteigend ? a - b : b - a);
+    s10Gehaengt = s10Ziel.slice(0, 1);          // Orientierungshilfe
+    s10Vorrat = shuffle(s10Ziel.slice(1));
+    s10Dreh = s10Ziel.map(() => randomInt(-30, 30) / 10);
 
     setInstruction(aufsteigend
         ? 'Hänge die Zahlen der Größe nach auf. Beginne mit der <strong>kleinsten</strong> Zahl. ⬆️'
         : 'Hänge die Zahlen der Größe nach auf. Beginne mit der <strong>größten</strong> Zahl. ⬇️');
 
-    station8Zeichnen();
+    station10Zeichnen();
 }
 
-function station8Zeichnen() {
+/* Über der Leine hängt Wäsche, die von Platz zu Platz größer (oder
+   kleiner) wird. So sieht das Kind die Richtung, bevor es einen Satz
+   liest - der Pfeil in der Aufgabe allein reicht vielen nicht. */
+function station10BandHTML() {
+    let html = '<div class="groessen-band" aria-hidden="true">';
+    for (let i = 0; i < S10_PLAETZE; i++) {
+        const stufe = s10Aufsteigend ? i : (S10_PLAETZE - 1 - i);
+        const groesse = (0.85 + stufe * 0.33).toFixed(2);
+        html += '<span class="groessen-feld"><span class="groessen-bild" ' +
+                'style="font-size: ' + groesse + 'rem;">👕</span></span>';
+    }
+    return html + '</div>';
+}
+
+function station10Zeichnen() {
     const farbe = 'var(--color-' + STATIONS[currentStationIndex].color + ')';
 
     let plaetze = '';
-    for (let i = 0; i < S8_PLAETZE; i++) {
-        const zahl = s8Gehaengt[i];
-        const istDran = (i === s8Gehaengt.length);
+    for (let i = 0; i < S10_PLAETZE; i++) {
+        const zahl = s10Gehaengt[i];
+        const istDran = (i === s10Gehaengt.length);
 
         plaetze += '<div class="leine-platz">' +
                    '<span class="platz-nr">' + (i + 1) + '</span>';
 
         if (zahl !== undefined) {
             plaetze += '<div class="waesche-karte' + (i === 0 ? ' karte-vorgabe' : '') +
-                       '" style="--dreh: ' + s8Dreh[i] + 'deg;">' +
+                       '" style="--dreh: ' + s10Dreh[i] + 'deg;">' +
                        '<span class="klammer"></span>' + zahl + '</div>';
         } else {
             plaetze += '<div class="waesche-platzhalter' + (istDran ? ' dran' : '') + '">' +
@@ -1607,15 +1810,16 @@ function station8Zeichnen() {
     }
 
     let korb = '';
-    s8Vorrat.forEach(zahl => {
-        const haengt = (s8Gehaengt.indexOf(zahl) !== -1);
+    s10Vorrat.forEach(zahl => {
+        const haengt = (s10Gehaengt.indexOf(zahl) !== -1);
         korb += '<button class="vorrat-karte' + (haengt ? ' karte-verbraucht' : '') + '" ' +
-                'id="s8V' + zahl + '"' + (haengt ? ' disabled' : '') +
-                ' onclick="station8Pick(' + zahl + ')">' + zahl + '</button>';
+                'id="s10V' + zahl + '"' + (haengt ? ' disabled' : '') +
+                ' onclick="station10Pick(' + zahl + ')">' + zahl + '</button>';
     });
 
     setTaskArea(
         '<div class="leine-bereich" style="--leine-farbe: ' + farbe + ';">' +
+        station10BandHTML() +
         '<div class="leine"><div class="leine-seil"></div>' +
         '<div class="leine-reihe">' + plaetze + '</div></div>' +
         '<div class="waesche-korb">' + korb + '</div>' +
@@ -1623,23 +1827,23 @@ function station8Zeichnen() {
     );
 }
 
-function station8Pick(zahl) {
+function station10Pick(zahl) {
     if (answerLocked) return;
-    if (s8Gehaengt.indexOf(zahl) !== -1) return;
+    if (s10Gehaengt.indexOf(zahl) !== -1) return;
 
-    const erwartet = s8Ziel[s8Gehaengt.length];
+    const erwartet = s10Ziel[s10Gehaengt.length];
 
     if (zahl !== erwartet) {
-        const karte = document.getElementById('s8V' + zahl);
+        const karte = document.getElementById('s10V' + zahl);
         if (karte) karte.classList.add('karte-falsch');
-        submitAnswer(false, 'Die richtige Reihenfolge wäre: ' + s8Ziel.join(' – '));
+        submitAnswer(false, 'Die richtige Reihenfolge wäre: ' + s10Ziel.join(' – '));
         return;
     }
 
-    s8Gehaengt.push(zahl);
-    station8Zeichnen();
+    s10Gehaengt.push(zahl);
+    station10Zeichnen();
 
-    if (s8Gehaengt.length === S8_PLAETZE) submitAnswer(true);
+    if (s10Gehaengt.length === S10_PLAETZE) submitAnswer(true);
 }
 
 /* ============================================
@@ -1694,9 +1898,6 @@ const STATIONS = [
         emoji: '🔊',
         color: 'modul5',
         subStations: [
-            { name: 'Zehnerzahlen', emoji: '🔟',
-              hinweis: '10, 20, 30 … hören und eintippen.',
-              newTask: station5Zehner },
             { name: 'Bis 100', emoji: '🔢',
               hinweis: 'Jede Zahl bis 100 hören und eintippen.',
               newTask: station5Bis100 },
@@ -1720,17 +1921,31 @@ const STATIONS = [
         newTask: station7NewTask
     },
     {
+        name: 'Zahlen zerlegen',
+        title: 'Station 8: Zahlen zerlegen',
+        emoji: '🧩',
+        color: 'modul10',
+        newTask: station8NewTask
+    },
+    {
+        name: 'Zahlen vergleichen',
+        title: 'Station 9: Zahlen vergleichen',
+        emoji: '⚖️',
+        color: 'modul9',
+        newTask: station9NewTask
+    },
+    {
         name: 'Wäscheleine',
-        title: 'Station 8: Wäscheleine',
+        title: 'Station 10: Wäscheleine',
         emoji: '🧺',
         color: 'modul8',
         subStations: [
             { name: 'Kleinste zuerst', emoji: '⬆️',
               hinweis: 'Die Zahlen aufsteigend aufhängen.',
-              newTask: station8Aufsteigend },
+              newTask: station10Aufsteigend },
             { name: 'Größte zuerst', emoji: '⬇️',
               hinweis: 'Die Zahlen absteigend aufhängen.',
-              newTask: station8Absteigend }
+              newTask: station10Absteigend }
         ]
     }
 ];
@@ -1752,8 +1967,8 @@ const BEREICHE = [
         name: 'Zehner und Einer',
         emoji: '🔢',
         color: 'modul5',
-        hinweis: 'Alle Zahlen bis 100 – hören, bauen und zuordnen.',
-        stationen: [4, 5, 6, 7]
+        hinweis: 'Alle Zahlen bis 100 – hören, bauen, zerlegen, vergleichen und ordnen.',
+        stationen: [4, 5, 6, 7, 8, 9]
     }
 ];
 

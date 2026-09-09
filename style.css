@@ -34,6 +34,14 @@
     --color-modul8: #8D6E63;
     --color-modul8-light: #D7CCC8;
 
+    /* Farben für Modul 9 */
+    --color-modul9: #00ACC1;
+    --color-modul9-light: #80DEEA;
+
+    /* Farben für Modul 10 */
+    --color-modul10: #7CB342;
+    --color-modul10-light: #C5E1A5;
+
     --color-text: #333;
     --color-bg: #f5f5f5;
     --color-white: #ffffff;
@@ -157,6 +165,8 @@ body {
 .operation-btn.modul6 { background: linear-gradient(135deg, var(--color-modul6) 0%, var(--color-modul6-light) 100%); }
 .operation-btn.modul7 { background: linear-gradient(135deg, var(--color-modul7) 0%, var(--color-modul7-light) 100%); }
 .operation-btn.modul8 { background: linear-gradient(135deg, var(--color-modul8) 0%, var(--color-modul8-light) 100%); }
+.operation-btn.modul9 { background: linear-gradient(135deg, var(--color-modul9) 0%, var(--color-modul9-light) 100%); }
+.operation-btn.modul10 { background: linear-gradient(135deg, var(--color-modul10) 0%, var(--color-modul10-light) 100%); }
 
 .operation-btn .emoji { font-size: 3.5rem; }
 .operation-btn .hinweis {
@@ -507,6 +517,30 @@ body {
     box-shadow: 0 0 0 var(--color-modul8);
 }
 
+.modul9-color { color: var(--color-modul9); }
+.check-btn.modul9-color, .next-btn.modul9-color {
+    background: var(--color-modul9);
+}
+#stationOptions.modul9-opts .option-btn {
+    background-color: var(--color-modul9-light);
+    box-shadow: 0 5px 0 var(--color-modul9);
+}
+#stationOptions.modul9-opts .option-btn:active:not(:disabled) {
+    box-shadow: 0 0 0 var(--color-modul9);
+}
+
+.modul10-color { color: var(--color-modul10); }
+.check-btn.modul10-color, .next-btn.modul10-color {
+    background: var(--color-modul10);
+}
+#stationOptions.modul10-opts .option-btn {
+    background-color: var(--color-modul10-light);
+    box-shadow: 0 5px 0 var(--color-modul10);
+}
+#stationOptions.modul10-opts .option-btn:active:not(:disabled) {
+    box-shadow: 0 0 0 var(--color-modul10);
+}
+
 /* ============================================
    Station 5: Zahlen hören
    ============================================ */
@@ -618,6 +652,25 @@ body {
    Ein Seil, nummerierte Plätze, darunter der Wäschekorb
    ============================================ */
 .leine-bereich { padding: 10px 0 5px; }
+
+/* Größenband über der Leine: zeigt ohne ein Wort, in welche Richtung
+   die Zahlen wachsen. Die Felder sind so breit wie die Karten
+   darunter, damit Bild und Platz übereinanderstehen. */
+.groessen-band {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+.groessen-feld {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    width: 78px;
+    height: 40px;
+}
+.groessen-bild { line-height: 1; opacity: 0.75; }
 
 .leine { position: relative; }
 
@@ -954,7 +1007,11 @@ body {
     color: #b71c1c;
 }
 
+/* Das "und" ist ein Baustein wie die Zahlwörter, nur schmaler -
+   die beiden Spalten sollen die Hauptsache bleiben. */
 .wort-und {
+    min-width: 0;
+    padding: 10px 18px;
     font-size: 1.5rem;
     font-weight: 700;
     color: #78909C;
@@ -1147,15 +1204,17 @@ body {
     background: #FAFAFA;
 }
 
+/* --karte-farbe erlaubt es einer Station, ihre eigene Farbe zu setzen;
+   ohne Angabe bleibt es beim Blau der Ordnen-Stationen. */
 .zahl-karte.klickbar {
     cursor: pointer;
-    border-color: var(--color-modul2);
-    box-shadow: 0 4px 0 var(--color-modul2);
+    border-color: var(--karte-farbe, var(--color-modul2));
+    box-shadow: 0 4px 0 var(--karte-farbe, var(--color-modul2));
     transition: transform 0.1s, box-shadow 0.1s;
 }
 .zahl-karte.klickbar:active:not(:disabled) {
     transform: translateY(4px);
-    box-shadow: 0 0 0 var(--color-modul2);
+    box-shadow: 0 0 0 var(--karte-farbe, var(--color-modul2));
 }
 .zahl-karte.karte-verbraucht {
     opacity: 0.35;
@@ -1210,6 +1269,100 @@ body {
     font-size: 2.6rem;
     font-weight: bold;
     color: var(--color-modul2);
+}
+
+/* Hilfe zum Vergleichen: beide Zahlen als Zehnerstangen nebeneinander.
+   Der Strich in der Mitte trennt sie, damit nicht eine lange Reihe
+   entsteht, die man nur schwer auseinanderhält. */
+.vergleich-bilder {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 26px;
+    flex-wrap: wrap;
+}
+.vergleich-bild {
+    padding: 10px 16px;
+    background: #fff;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+}
+
+/* ============================================
+   Station 10: Zahlen zerlegen
+   ============================================ */
+.zerlegen-bereich { text-align: center; }
+
+/* Die Zahlenkarten wie beim Legematerial: blau die Zehner, grün die
+   Einer. Die Zehnerkarte ist doppelt so lang - sie steht für zwei
+   Stellen, die Einerkarte nur für eine. */
+.stellenkarten {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    margin-bottom: 22px;
+}
+.stellenkarte {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    font-size: 2.1rem;
+    font-weight: bold;
+    color: #fff;
+    border-radius: 6px;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
+}
+/* Die Zehnerkarte hat zwei gleich große Felder: vorne die Ziffer,
+   hinten die Null. */
+.stellenkarte.zehner {
+    width: 128px;
+    background: #29A8E0;
+}
+.stellenkarte.zehner .stelle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+}
+/* Die Einerkarte liegt auf dem hinteren Feld und deckt die Null zu.
+   Sie sitzt tiefer als die Zehnerkarte: oben schaut ein Streifen Blau
+   hervor, unten steht die grüne Karte über. So sieht man, dass hier
+   zwei Karten übereinanderliegen - und dass die blaue die längere ist. */
+.stellenkarte.einer {
+    width: 58px;
+    height: 58px;
+    background: #43A047;
+    margin: 12px 0 0 -66px;
+    position: relative;
+    z-index: 1;
+}
+
+.zerlegen-gleichung {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+}
+.zerlegen-zeichen {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #78909C;
+}
+/* Hier gehört die nächste Karte hin */
+.zahl-karte.luecke.dran {
+    border-color: var(--karte-farbe, var(--color-modul2));
+    background: rgba(124, 179, 66, 0.12);
+}
+
+.zerlegen-karten {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
 }
 
 .zahlenreihe {
@@ -1395,7 +1548,8 @@ body {
     .strichbild { gap: 7px; }
     .einer-punkt { width: 8px; height: 8px; }
     .punkt-spalte { gap: 2px; }
-    .leine-reihe { gap: 6px; }
+    .leine-reihe, .groessen-band { gap: 6px; }
+    .groessen-feld { width: 50px; height: 32px; }
     .waesche-karte, .waesche-platzhalter, .vorrat-karte { width: 50px; min-height: 48px; font-size: 1.15rem; }
     .platz-nr { width: 20px; height: 20px; font-size: 0.75rem; left: -4px; }
     .klammer { width: 10px; height: 22px; top: -14px; }
@@ -1404,7 +1558,8 @@ body {
 
 /* Sehr schmale Handys: die sechs Plätze müssen nebeneinander passen */
 @media (max-width: 480px) {
-    .leine-reihe { gap: 3px; }
+    .leine-reihe, .groessen-band { gap: 3px; }
+    .groessen-feld { width: 40px; height: 28px; }
     .waesche-karte, .waesche-platzhalter { width: 40px; min-height: 44px; }
     .waesche-karte { font-size: 1rem; }
     .platz-nr { width: 17px; height: 17px; font-size: 0.65rem; left: -3px; top: 18px; }
