@@ -42,6 +42,18 @@
     --color-modul10: #7CB342;
     --color-modul10-light: #C5E1A5;
 
+    /* Farben für Modul 11 */
+    --color-modul11: #F4511E;
+    --color-modul11-light: #FFAB91;
+
+    /* Farben für Modul 12 */
+    --color-modul12: #546E7A;
+    --color-modul12-light: #B0BEC5;
+
+    /* Farben für Modul 13 */
+    --color-modul13: #D81B60;
+    --color-modul13-light: #F48FB1;
+
     --color-text: #333;
     --color-bg: #f5f5f5;
     --color-white: #ffffff;
@@ -167,6 +179,9 @@ body {
 .operation-btn.modul8 { background: linear-gradient(135deg, var(--color-modul8) 0%, var(--color-modul8-light) 100%); }
 .operation-btn.modul9 { background: linear-gradient(135deg, var(--color-modul9) 0%, var(--color-modul9-light) 100%); }
 .operation-btn.modul10 { background: linear-gradient(135deg, var(--color-modul10) 0%, var(--color-modul10-light) 100%); }
+.operation-btn.modul11 { background: linear-gradient(135deg, var(--color-modul11) 0%, var(--color-modul11-light) 100%); }
+.operation-btn.modul12 { background: linear-gradient(135deg, var(--color-modul12) 0%, var(--color-modul12-light) 100%); }
+.operation-btn.modul13 { background: linear-gradient(135deg, var(--color-modul13) 0%, var(--color-modul13-light) 100%); }
 
 .operation-btn .emoji { font-size: 3.5rem; }
 .operation-btn .hinweis {
@@ -177,6 +192,15 @@ body {
     margin-top: -6px;
 }
 .operation-btn:hover { transform: translateY(-5px) scale(1.05); box-shadow: var(--shadow-hover); }
+
+/* Noch nicht freigeschaltet: zu sehen, aber blass und ohne Reaktion */
+.operation-btn.bereich-zu {
+    filter: grayscale(0.7);
+    opacity: 0.6;
+    cursor: default;
+    box-shadow: none;
+}
+.operation-btn.bereich-zu:hover { transform: none; box-shadow: none; }
 
 /* ============================================
    Übungs-Screens & Layouts
@@ -262,6 +286,35 @@ body {
 .modul1-color { color: var(--color-modul1); }
 .description { font-size: 1.1rem; color: #666; text-align: center; margin-bottom: 30px; }
 
+/* Wo die Frage selbst die Aufgabe ist ("In welcher Zeile ...?"), steht
+   sie gross da - sie muss neben der grossen Zahl bestehen können. */
+.description .frage-gross {
+    display: block;
+    font-size: 1.7rem;
+    line-height: 1.3;
+    font-weight: 700;
+    color: var(--color-text);
+}
+@media (max-width: 600px) {
+    .description .frage-gross { font-size: 1.35rem; }
+}
+
+/* Das entscheidende Wort der Frage: unterstrichen und mit demselben
+   Pfeil wie im Schaubild darunter - quer für die Zeile, nach unten
+   für die Spalte. */
+.frage-wort {
+    color: #E65100;
+    text-decoration: underline;
+    text-decoration-color: #FB8C00;
+    text-decoration-thickness: 3px;
+    text-underline-offset: 5px;
+}
+
+.frage-pfeil {
+    margin-left: 7px;
+    color: #FB8C00;
+}
+
 /* ============================================
    Aufgabenbereich & Interaktion
    ============================================ */
@@ -314,6 +367,8 @@ body {
 }
 .feedback-area.correct { background: #c8e6c9; border-left: 5px solid #2e7d32; color: #1b5e20; }
 .feedback-area.wrong { background: #ffcdd2; border-left: 5px solid #c62828; color: #b71c1c; }
+/* Noch ein Versuch: gelb statt rot – die Aufgabe ist ja nicht vorbei */
+.feedback-area.nochmal { background: #FFF3CD; border-left: 5px solid #F57F17; color: #E65100; }
 
 /* ============================================
    Responsive Design (Tablets & Handys)
@@ -539,6 +594,42 @@ body {
 }
 #stationOptions.modul10-opts .option-btn:active:not(:disabled) {
     box-shadow: 0 0 0 var(--color-modul10);
+}
+
+.modul11-color { color: var(--color-modul11); }
+.check-btn.modul11-color, .next-btn.modul11-color {
+    background: var(--color-modul11);
+}
+#stationOptions.modul11-opts .option-btn {
+    background-color: var(--color-modul11-light);
+    box-shadow: 0 5px 0 var(--color-modul11);
+}
+#stationOptions.modul11-opts .option-btn:active:not(:disabled) {
+    box-shadow: 0 0 0 var(--color-modul11);
+}
+
+.modul12-color { color: var(--color-modul12); }
+.check-btn.modul12-color, .next-btn.modul12-color {
+    background: var(--color-modul12);
+}
+#stationOptions.modul12-opts .option-btn {
+    background-color: var(--color-modul12-light);
+    box-shadow: 0 5px 0 var(--color-modul12);
+}
+#stationOptions.modul12-opts .option-btn:active:not(:disabled) {
+    box-shadow: 0 0 0 var(--color-modul12);
+}
+
+.modul13-color { color: var(--color-modul13); }
+.check-btn.modul13-color, .next-btn.modul13-color {
+    background: var(--color-modul13);
+}
+#stationOptions.modul13-opts .option-btn {
+    background-color: var(--color-modul13-light);
+    box-shadow: 0 5px 0 var(--color-modul13);
+}
+#stationOptions.modul13-opts .option-btn:active:not(:disabled) {
+    box-shadow: 0 0 0 var(--color-modul13);
 }
 
 /* ============================================
@@ -853,14 +944,72 @@ body {
     transform: rotate(var(--dreh, 0deg)) scale(1.07);
     box-shadow: 0 0 0 4px var(--paar-farbe), 0 8px 18px rgba(0, 0, 0, 0.26);
 }
+/* Gefunden: jedes Pärchen in seiner eigenen Farbe (siehe S7_FARBEN) */
 .paar-karte.paar-gefunden {
-    background-color: #c8e6c9;
-    box-shadow: 0 0 0 3px #2e7d32;
+    background-color: var(--fund-flaeche, #c8e6c9);
+    box-shadow: 0 0 0 3px var(--fund-rand, #2e7d32);
     cursor: default;
 }
 .paar-karte.paar-falsch {
     background-color: #ffcdd2;
     box-shadow: 0 0 0 3px #c62828;
+}
+
+/* Aufgelöst: so hätten die beiden gesuchten Karten gepasst. Bewusst grau
+   statt bunt – es ist kein selbst gefundenes Pärchen. */
+.paar-karte.paar-gesucht {
+    background-color: #eceff1;
+    box-shadow: 0 0 0 3px #546e7a;
+}
+
+/* Über dem Tisch steht die gesuchte Zahl als Zahlwort */
+.paar-suche {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 4px;
+}
+.paar-such-label {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #666;
+}
+.paar-such-karte {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    padding: 9px 14px 9px 24px;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 0 0 3px var(--paar-farbe), 0 4px 10px rgba(0, 0, 0, 0.16);
+}
+.paar-such-wort {
+    font-size: 1.9rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+/* Der Lautsprecher ist ein Angebot: Das Zahlwort steht daneben, das
+   Anhören kommt dazu. Ohne Sprachausgabe fehlt der Knopf ganz. */
+.paar-hoer-btn {
+    flex: none;
+    width: 48px;
+    height: 48px;
+    border: none;
+    border-radius: 50%;
+    background: var(--paar-farbe);
+    color: #fff;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.2);
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+.paar-hoer-btn:active {
+    transform: translateY(3px);
+    box-shadow: 0 0 0 rgba(0, 0, 0, 0.2);
 }
 
 /* Der farbige Punkt in der Ecke – blau = Zahl, orange = Bild */
@@ -1517,6 +1666,626 @@ body {
 }
 .hilfe-inhalt.sichtbar { display: block; }
 
+/* Zwei Hilfen nebeneinander (Zahlendreher) */
+.hilfe-tasten {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+}
+
+/* ============================================
+   Station 11: Hunderterfeld
+   Punktefeld (Menge), Hundertertafel (Zahlen an ihrem Platz)
+   und Ausschnitte daraus.
+   ============================================ */
+.hf-bereich {
+    --hf-punkt: 22px;
+    --hf-luecke: 5px;
+    --hf-abstand: 14px;   /* die größere Lücke nach je fünf Punkten */
+
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 18px 20px;
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+}
+
+.hunderterfeld {
+    display: flex;
+    flex-direction: column;
+    gap: var(--hf-luecke);
+}
+.hf-reihe {
+    display: flex;
+    gap: var(--hf-luecke);
+}
+/* Fünfereinteilung: eine breitere Lücke nach der fünften Spalte und Reihe */
+.hf-reihe:nth-child(6) { margin-top: var(--hf-abstand); }
+.hf-punkt:nth-child(6) { margin-left: var(--hf-abstand); }
+
+.hf-punkt {
+    width: var(--hf-punkt);
+    height: var(--hf-punkt);
+    border-radius: 50%;
+    border: 2px solid #CFD8DC;
+    background: #FAFAFA;
+}
+.hf-punkt.hf-voll {
+    border-color: var(--color-modul11);
+    background: var(--color-modul11);
+}
+
+/* Zählhilfe am Rand. Sie ist nur unsichtbar, nicht ausgebaut -
+   so bleibt das Feld beim Einblenden an derselben Stelle stehen. */
+.hf-marken {
+    display: flex;
+    flex-direction: column;
+    gap: var(--hf-luecke);
+    visibility: hidden;
+}
+.hf-bereich.marken-sichtbar .hf-marken { visibility: visible; }
+
+.hf-marke {
+    display: flex;
+    align-items: center;
+    height: var(--hf-punkt);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #90A4AE;
+}
+.hf-marke:nth-child(6) { margin-top: var(--hf-abstand); }
+
+/* ---------- Hundertertafel und Ausschnitt ---------- */
+.ht-bereich {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 26px;
+}
+
+/* Die Spalten sind Bruchteile der Breite, nicht feste Pixel: zehn
+   Spalten passen sonst auf schmalen Handys nicht mehr in die Karte,
+   und eine Hundertertafel zum Seitwärtsscrollen taugt nichts, wenn es
+   gerade um die Übersicht geht. max-width hält sie sonst bei ihrer
+   Wunschgröße, margin zentriert sie auch außerhalb von .ht-bereich -
+   etwa eingeklappt im Hilfe-Kasten der Pfeilwege. */
+.hundertertafel {
+    --ht-zelle: 40px;
+    --ht-abstand: 3px;
+    --ht-rand: 10px;
+    display: grid;
+    grid-template-columns: repeat(10, minmax(0, 1fr));
+    gap: var(--ht-abstand);
+    padding: var(--ht-rand);
+    width: 100%;
+    max-width: calc(10 * var(--ht-zelle) + 9 * var(--ht-abstand) + 2 * var(--ht-rand));
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+}
+
+/* Der Ausschnitt zeigt dieselben Felder, nur größer - hier zählt
+   jedes einzelne Feld, nicht die Übersicht. */
+.ht-ausschnitt {
+    --ht-zelle: 78px;
+    display: grid;
+    grid-template-columns: repeat(3, var(--ht-zelle));
+    gap: 6px;
+}
+
+.ht-zelle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--ht-zelle);
+    border-radius: 6px;
+    background: #ECEFF1;
+    font-size: calc(var(--ht-zelle) * 0.4);
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+/* Weggeschnitten: das Feld gehört nicht zum Stück */
+.ht-zelle.ht-leer {
+    background: transparent;
+}
+
+/* Die vorgegebenen Zahlen des Ausschnitts stehen auf weißem Papier */
+.ht-zelle.ht-vorgabe {
+    background: #fff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.ht-zelle.ht-luecke {
+    background: #fff;
+    border: 3px dashed #CFD8DC;
+}
+/* Hier gehört die nächste Zahl hin. Die Farbe kommt aus Rahmen und
+   Schrift, damit dieselbe Regel für alle drei Stationsfarben passt. */
+.ht-zelle.ht-dran {
+    border-color: var(--ht-farbe);
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--ht-farbe);
+    font-weight: 800;
+    animation: htPuls 1.1s ease-in-out infinite;
+}
+
+@keyframes htPuls {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.08); }
+}
+
+.ht-zelle.ht-gefuellt {
+    background: #C8E6C9;
+    color: #2E7D32;
+    font-weight: 800;
+}
+/* Nach einem Fehler: so wäre es richtig gewesen */
+.ht-zelle.ht-loesung {
+    background: #E3F2FD;
+    color: #1565C0;
+    font-weight: 800;
+}
+
+/* Vorrat: die Zahlen, die noch eingesetzt werden.
+   width: 100% ist nötig, weil .ht-bereich seine Kinder zentriert und
+   sie sonst nur so breit wie ihr Inhalt wären - dann bräche die
+   Kartenreihe auf schmalen Bildschirmen nie um. */
+.ht-vorrat {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+}
+
+.ht-karte {
+    width: 72px;
+    min-height: 56px;
+    background: #fff;
+    border: 3px solid var(--ht-farbe);
+    border-radius: 10px;
+    box-shadow: 0 4px 0 var(--ht-farbe);
+    font-family: inherit;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--color-text);
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+.ht-karte:active:not(:disabled) {
+    transform: translateY(4px);
+    box-shadow: 0 0 0 var(--ht-farbe);
+}
+.ht-karte.karte-verbraucht {
+    opacity: 0.3;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+.ht-karte.karte-falsch {
+    background: #ffcdd2;
+    border-color: #c62828;
+    box-shadow: 0 4px 0 #c62828;
+}
+
+/* ---------- Zahl selbst legen (Station 11) ---------- */
+.hf-tasten {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 22px;
+}
+
+.hf-taste {
+    min-width: 84px;
+    padding: 14px 18px;
+    font-family: inherit;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #fff;
+    background: var(--color-modul11);
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 5px 0 #BF360C;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+.hf-taste:active {
+    transform: translateY(5px);
+    box-shadow: 0 0 0 #BF360C;
+}
+
+/* ---------- Leere Tafel: Feld antippen (Station 12) ---------- */
+.ht-zelle.ht-feld {
+    border: 2px solid #E0E0E0;
+    font-family: inherit;
+    cursor: pointer;
+    padding: 0;
+}
+.ht-zelle.ht-feld:hover {
+    background: var(--ht-farbe);
+    opacity: 0.5;
+}
+
+/* Die vier Eckzahlen sind die Orientierung in der leeren Tafel */
+.ht-zelle.ht-ecke {
+    background: #fff;
+    color: var(--ht-farbe);
+    font-weight: 800;
+    box-shadow: inset 0 0 0 2px var(--ht-farbe);
+}
+
+/* Das danebengetippte Feld */
+.ht-zelle.ht-daneben {
+    background: #ffcdd2;
+    color: #c62828;
+    font-weight: 800;
+}
+
+/* Die gesuchte Zeile oder Spalte nach der Antwort */
+.ht-zelle.ht-linie {
+    background: #FFE0B2;
+    color: #E65100;
+}
+
+/* ---------- Gesuchte Zahl neben der Tafel (Station 12) ---------- */
+.ht-mit-zahl {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 22px;
+    width: 100%;
+}
+
+/* width bleibt 100%: mit width:auto fiele das Grid auf die Breite
+   seines Inhalts zusammen, und in einer fast leeren Tafel ist der
+   winzig. Als schrumpfbares Flex-Kind gibt sie stattdessen so viel ab,
+   wie die Zahl daneben braucht - ihre max-width deckelt sie nach oben. */
+.ht-mit-zahl .hundertertafel {
+    flex: 0 1 auto;
+    min-width: 0;
+    margin: 0;
+}
+
+.ht-suchzahl {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 14px 22px;
+    background: #fff;
+    border: 4px solid var(--ht-farbe);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+}
+
+.ht-suchzahl-label {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #90A4AE;
+}
+
+.ht-suchzahl-wert {
+    font-size: 3.4rem;
+    font-weight: 800;
+    line-height: 1.1;
+    color: var(--ht-farbe);
+}
+
+/* Unter ~620 px passen zehn Spalten und die Zahl nicht mehr
+   nebeneinander - dann rückt die Zahl über die Tafel. */
+@media (max-width: 620px) {
+    .ht-mit-zahl {
+        flex-direction: column;
+        gap: 14px;
+    }
+    .ht-mit-zahl .hundertertafel { width: 100%; }
+    .ht-suchzahl { flex-direction: row; align-items: baseline; gap: 10px; padding: 10px 20px; }
+    .ht-suchzahl-wert { font-size: 2.6rem; }
+}
+
+/* ---------- Zeile und Spalte: das Schaubild (Station 12) ---------- */
+/* Steht dauerhaft über der Aufgabe. Eingefärbt ist dieselbe Farbe wie
+   später in der Auflösung, damit Bild und Tafel zusammenpassen. */
+.zsp-erklaerung {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+.zsp-karte {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    padding: 10px 14px;
+    border: 2px solid #E0E0E0;
+    border-radius: 12px;
+    background: #fff;
+}
+/* Die gerade gefragte Seite */
+.zsp-karte.zsp-aktiv {
+    border-color: #E65100;
+    box-shadow: 0 3px 10px rgba(230, 81, 0, 0.2);
+}
+
+.zsp-mini {
+    display: grid;
+    grid-template-columns: repeat(var(--zsp-spalten), 15px);
+    gap: 2px;
+}
+
+.zsp-feld {
+    height: 15px;
+    border-radius: 3px;
+    background: #ECEFF1;
+}
+.zsp-feld.zsp-markiert { background: #FFB74D; }
+
+.zsp-label {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #78909C;
+}
+.zsp-karte.zsp-aktiv .zsp-label { color: #E65100; }
+
+/* Der Pfeil steht unter dem Wort und zeigt in die Richtung, in die die
+   Zeile bzw. die Spalte läuft - quer oder von oben nach unten. */
+.zsp-pfeil {
+    display: block;
+    font-size: 1.8rem;
+    line-height: 1;
+    color: #FB8C00;
+}
+
+.zsp-wie {
+    font-size: 0.85rem;
+    color: #90A4AE;
+}
+
+/* ---------- Tafel mit Zehner- und Einerrand (Lerncoach) ---------- */
+/* Die Randleisten übernehmen Zellengrösse, Abstand und Innenrand der
+   Tafel, damit Marke und Spalte bzw. Marke und Zeile genau
+   übereinanderliegen. */
+.ht-beschriftet {
+    --ht-zelle: 40px;
+    --ht-abstand: 3px;
+    --ht-rand: 10px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+}
+
+/* Feste Plätze: die Tafel bleibt an ihrem Platz, auch wenn gerade nur
+   eine der beiden Randleisten eingeschaltet ist. */
+.ht-beschriftet > .hundertertafel {
+    grid-row: 2;
+    grid-column: 2;
+}
+
+.ht-kopf {
+    grid-row: 1;
+    grid-column: 2;
+    display: grid;
+    grid-template-columns: repeat(10, minmax(0, 1fr));
+    gap: var(--ht-abstand);
+    width: 100%;
+    max-width: calc(10 * var(--ht-zelle) + 9 * var(--ht-abstand) + 2 * var(--ht-rand));
+    margin: 0 auto;
+    padding: 0 var(--ht-rand) 4px;
+}
+
+.ht-seite {
+    grid-row: 2;
+    grid-column: 1;
+    display: grid;
+    grid-template-rows: repeat(10, var(--ht-zelle));
+    gap: var(--ht-abstand);
+    padding: var(--ht-rand) 4px var(--ht-rand) 0;
+}
+
+.ht-randmarke {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #90A4AE;
+}
+
+/* Die Spalte der Zahlen mit 0 am Ende: der Sonderfall soll ins Auge
+   fallen, denn dort passt der Zehner nicht zur Zeile. */
+.ht-randmarke.ht-randmarke-null { color: #E65100; }
+
+/* ---------- Der Lerncoach (zuschaltbare Hundertertafel) ---------- */
+.coach {
+    margin-top: 22px;
+    text-align: center;
+    --coach-farbe: var(--color-modul12);
+}
+
+.coach-btn {
+    padding: 10px 22px;
+    font-family: inherit;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--coach-farbe);
+    background: #fff;
+    border: 3px solid var(--coach-farbe);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+.coach-btn:hover { background: #F5F5F5; }
+.coach-btn.aktiv {
+    background: var(--coach-farbe);
+    color: #fff;
+}
+
+.coach-panel {
+    display: none;
+    max-width: 520px;
+    margin: 14px auto 0;
+    padding: 14px 16px 18px;
+    background: #E8F5E9;
+    border: 2px solid #A5D6A7;
+    border-radius: 14px;
+}
+.coach-panel.sichtbar { display: block; }
+
+.coach-text {
+    margin-bottom: 12px;
+    font-size: 1.05rem;
+    line-height: 1.45;
+    color: var(--color-text);
+}
+
+/* Der zweite Schalter im Coach: erst die blanke Tafel, auf Wunsch
+   Zehner und Einer dazu. */
+/* Die beiden Schalter nebeneinander, auf schmalen Geräten untereinander */
+.coach-schalter-reihe {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.coach-schalter {
+    padding: 8px 18px;
+    font-family: inherit;
+    font-size: 0.98rem;
+    font-weight: 600;
+    color: var(--coach-farbe);
+    background: #fff;
+    border: 2px solid var(--coach-farbe);
+    border-radius: 10px;
+    cursor: pointer;
+}
+.coach-schalter.aktiv {
+    background: var(--coach-farbe);
+    color: #fff;
+}
+
+.coach-hinweis {
+    margin-bottom: 10px;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    color: #558B2F;
+}
+
+/* ---------- Zahlendreher (Station 12) ---------- */
+.ht-zelle.ht-markiert {
+    background: #fff;
+    border: 3px solid var(--ht-farbe);
+    color: var(--ht-farbe);
+    font-family: inherit;
+    font-size: calc(var(--ht-zelle) * 0.45);
+    font-weight: 800;
+    cursor: pointer;
+    padding: 0;
+}
+.ht-zelle.ht-markiert:hover { background: rgba(0, 0, 0, 0.05); }
+
+/* ---------- Zahlenkönig (Station 12) ---------- */
+/* Das Bild sitzt auf dem Feld, auf das es gehört - größer als eine
+   Ziffer, damit es in der fast leeren Tafel sofort auffällt. */
+.ht-zelle.ht-bild {
+    font-size: calc(var(--ht-zelle) * 0.62);
+    line-height: 1;
+    background: #fff;
+    box-shadow: inset 0 0 0 2px var(--ht-farbe);
+}
+.ht-zelle.ht-bild-fertig {
+    background: #C8E6C9;
+    box-shadow: inset 0 0 0 2px #2E7D32;
+}
+
+/* Legende: zu jedem Bild der Kasten für seine Zahl */
+.koenig-legende {
+    --ht-zelle: 54px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px 18px;
+    width: 100%;
+}
+
+.koenig-paar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 10px;
+}
+
+/* Das gerade gesuchte Bild hervorheben - der Kasten mit dem ? allein
+   geht zwischen fünf Bildern zu leicht unter. */
+.koenig-paar.koenig-dran {
+    background: rgba(0, 0, 0, 0.06);
+    box-shadow: 0 0 0 2px var(--ht-farbe);
+}
+.koenig-paar.koenig-dran .koenig-bild { font-size: 2.2rem; }
+
+.koenig-bild {
+    font-size: 1.8rem;
+    line-height: 1;
+}
+
+.koenig-legende .ht-zelle {
+    min-width: var(--ht-zelle);
+    font-size: 1.3rem;
+}
+
+/* ---------- Pfeilwege (Station 13) ---------- */
+.weg-aufgabe {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin: 25px 0;
+}
+
+.weg-pfeil {
+    font-size: 2.6rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--color-modul13);
+}
+
+.weg-gleich {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #78909C;
+}
+
+.zahl-karte.weg-ziel {
+    color: var(--color-modul13);
+    border-color: var(--color-modul13);
+    border-style: dashed;
+}
+
+/* Der zurückgelegte Weg in der Tafel */
+.ht-zelle.ht-start {
+    background: #FFE0B2;
+    color: #E65100;
+    font-weight: 800;
+}
+.ht-zelle.ht-weg {
+    background: #F8BBD0;
+    color: #AD1457;
+    font-weight: 700;
+}
+
 /* ============================================
    Responsive Ergänzungen
    ============================================ */
@@ -1550,6 +2319,9 @@ body {
     .paar-feld { gap: 12px; }
     .paar-karte { width: 104px; min-height: 88px; padding: 18px 6px 22px; }
     .paar-wert { font-size: 1.7rem; }
+    .paar-such-karte { gap: 10px; padding: 7px 10px 7px 16px; }
+    .paar-such-wort { font-size: 1.35rem; }
+    .paar-hoer-btn { width: 42px; height: 42px; font-size: 1.2rem; }
     .zehner-strich { width: 3px; height: 46px; }
     .punkt-gruppe { gap: 4px; }
     .strich-gruppe { gap: 10px; }
@@ -1564,6 +2336,31 @@ body {
     .platz-nr { width: 20px; height: 20px; font-size: 0.75rem; left: -4px; }
     .klammer { width: 10px; height: 22px; top: -14px; }
     .waesche-korb { gap: 8px; margin-top: 28px; }
+    .hf-bereich { --hf-punkt: 16px; --hf-luecke: 4px; --hf-abstand: 10px; padding: 12px 14px; gap: 10px; }
+    .hf-marke { font-size: 0.8rem; }
+    .hundertertafel,
+    .ht-beschriftet { --ht-zelle: 30px; --ht-abstand: 2px; --ht-rand: 7px; }
+    .ht-randmarke { font-size: 0.8rem; }
+    .ht-ausschnitt { --ht-zelle: 62px; }
+    .ht-zelle.ht-luecke, .ht-zelle.ht-dran { border-width: 2px; }
+    .ht-karte { width: 60px; min-height: 50px; font-size: 1.2rem; }
+    .ht-bereich { gap: 20px; }
+    .hf-taste { min-width: 70px; padding: 12px 14px; font-size: 1.3rem; }
+    .hf-tasten { gap: 10px; margin-top: 18px; }
+    .weg-pfeil { font-size: 2rem; }
+    .weg-aufgabe { gap: 8px; margin: 18px 0; }
+    .koenig-legende { --ht-zelle: 44px; gap: 8px 12px; }
+    .koenig-bild { font-size: 1.5rem; }
+    .koenig-legende .ht-zelle { font-size: 1.1rem; }
+    /* Die beiden Karten müssen nebeneinander bleiben - der Vergleich
+       "quer gegen senkrecht" ist ja gerade der Sinn des Bildes. Die
+       Zeile darunter ist der breiteste Teil, also schrumpft sie zuerst. */
+    .zsp-erklaerung { gap: 6px; margin-bottom: 16px; flex-wrap: nowrap; }
+    .zsp-karte { padding: 8px 6px; }
+    .zsp-mini { grid-template-columns: repeat(var(--zsp-spalten), 12px); }
+    .zsp-feld { height: 12px; }
+    .zsp-label { font-size: 0.95rem; }
+    .zsp-wie { font-size: 0.72rem; text-align: center; }
 }
 
 /* Sehr schmale Handys: die sechs Plätze müssen nebeneinander passen */
@@ -1575,4 +2372,12 @@ body {
     .platz-nr { width: 17px; height: 17px; font-size: 0.65rem; left: -3px; top: 18px; }
     .klammer { width: 8px; height: 18px; top: -12px; }
     .vorrat-karte { width: 56px; min-height: 50px; font-size: 1.2rem; }
+    /* Die Hundertertafel muss mit zehn Spalten aufs Handy passen */
+    .hf-bereich { --hf-punkt: 13px; --hf-luecke: 3px; --hf-abstand: 8px; }
+    .hundertertafel,
+    .ht-beschriftet { --ht-zelle: 26px; --ht-abstand: 2px; --ht-rand: 5px; }
+    .ht-randmarke { font-size: 0.75rem; }
+    .ht-ausschnitt { --ht-zelle: 52px; gap: 4px; }
+    .ht-karte { width: 52px; min-height: 46px; font-size: 1.1rem; }
+    .hf-taste { min-width: 62px; padding: 11px 10px; font-size: 1.2rem; }
 }

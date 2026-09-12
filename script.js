@@ -190,6 +190,12 @@ let konfettiTimeout = null;
 let earnedStars = [];
 let answerLocked = false;
 
+/* Nach einem Fehlversuch darf noch einmal geraten werden - erst der
+   zweite Fehler löst die Aufgabe auf. Aufgaben mit nur zwei Antworten
+   nehmen sich davon aus: dort wäre der zweite Versuch geschenkt. */
+const MAX_VERSUCHE = 2;
+let versuche = 0;
+
 function stopStationTimer() {
     if (stationTimerInterval) {
         clearInterval(stationTimerInterval);
@@ -239,7 +245,7 @@ function showSubStationScreen(index) {
 
     const station = STATIONS[index];
     const titel = document.getElementById('subTitle');
-    titel.innerText = station.title;
+    titel.innerText = stationTitel(index);
     titel.className = 'exercise-title ' + station.color + '-color';
 
     const grid = document.getElementById('subButtonGrid');
@@ -272,7 +278,7 @@ function showModeScreen(index, subIndex) {
     const sub = station.subStations ? station.subStations[pendingSubIndex] : null;
 
     document.getElementById('modeTitle').innerText =
-        sub ? station.title + ' – ' + sub.name : station.title;
+        sub ? stationTitel(index) + ' – ' + sub.name : stationTitel(index);
     document.getElementById('modeTitle').className = 'exercise-title ' + station.color + '-color';
     document.getElementById('modeTempoBtn').className = 'operation-btn ' + station.color;
     document.getElementById('modeZeitBtn').className = 'operation-btn ' + station.color;
@@ -295,6 +301,16 @@ function buildStationUI() {
     resultStars.innerHTML = '';
 
     BEREICHE.forEach((bereich, i) => {
+        if (bereich.gesperrt) {
+            // Zu sehen, aber noch nicht zu öffnen: das Thema war noch nicht dran
+            grid.innerHTML +=
+                '<button class="operation-btn ' + bereich.color + ' bereich-zu" disabled>' +
+                '<span class="emoji">🔒</span>' +
+                '<span class="text">' + bereich.name + '</span>' +
+                '<span class="hinweis">Das hatten wir noch nicht – kommt später.</span>' +
+                '</button>';
+            return;
+        }
         grid.innerHTML +=
             '<button class="operation-btn ' + bereich.color + '" onclick="showBereich(' + i + ')">' +
             '<span class="emoji">' + bereich.emoji + '</span>' +
@@ -303,8 +319,8 @@ function buildStationUI() {
             '</button>';
     });
 
-    // Ein Stern pro Station – der Gesamtfortschritt der App
-    STATIONS.forEach((station, i) => {
+    // Ein Stern pro offener Station – der Gesamtfortschritt der App
+    offeneStationen().forEach(i => {
         stars.innerHTML += '<span id="stationStar' + i + '">☆</span>';
         resultStars.innerHTML += '<span style="color: gold; text-shadow: 0 0 15px rgba(255,215,0,0.8);">⭐</span>';
     });
@@ -312,13 +328,42 @@ function buildStationUI() {
     earnedStars = STATIONS.map(() => false);
 }
 
+/* Überschrift einer Station. Die Nummer steht nicht in der Liste,
+   sondern ergibt sich aus der Reihenfolge - so stimmt sie auch, wenn
+   Stationen in einen anderen Bereich umziehen. */
+function stationTitel(index) {
+    return 'Station ' + (index + 1) + ': ' + STATIONS[index].title;
+}
+
 /* Zu welchem Bereich gehört eine Station? */
 function bereichVon(stationIndex) {
     return BEREICHE.findIndex(b => b.stationen.indexOf(stationIndex) !== -1);
 }
 
+/* Ein gesperrter Bereich steht im Menü, lässt sich aber nicht öffnen.
+   Seine Stationen zählen darum auch nicht für die Sterne und die
+   Auswertung mit - sonst wäre die App nie zu schaffen. */
+function bereichGesperrt(bereichIndex) {
+    const bereich = BEREICHE[bereichIndex];
+    return !!(bereich && bereich.gesperrt);
+}
+
+function stationOffen(index) {
+    return !bereichGesperrt(bereichVon(index));
+}
+
+function offeneStationen() {
+    return STATIONS.map((station, i) => i).filter(stationOffen);
+}
+
+function alleSterneVerdient() {
+    return offeneStationen().every(i => earnedStars[i]);
+}
+
 /* Die Stationen eines Bereichs zur Auswahl anbieten */
 function showBereich(bereichIndex) {
+    if (bereichGesperrt(bereichIndex)) return;
+
     aktiverBereich = bereichIndex;
     const bereich = BEREICHE[bereichIndex];
 
@@ -439,13 +484,16 @@ function startStation(index, subIndex, modus) {
 function newStationTask() {
     if (autoAdvanceTimeout) { clearTimeout(autoAdvanceTimeout); autoAdvanceTimeout = null; }
     stopSprache();
+    markierungenAufraeumen();
     answerLocked = false;
+    versuche = 0;
 
     const station = STATIONS[currentStationIndex];
     const sub = station.subStations ? station.subStations[currentSubIndex] : null;
 
     document.getElementById('stationTitle').innerText =
-        sub ? station.title + ' – ' + sub.name : station.title;
+        sub ? stationTitel(currentStationIndex) + ' – ' + sub.name
+            : stationTitel(currentStationIndex);
     document.getElementById('stationTaskArea').innerHTML = '';
     document.getElementById('stationOptions').innerHTML = '';
 
@@ -463,28 +511,82 @@ function nextStationTask() {
     newStationTask();
 }
 
-/* Von den Stationen aufgerufen, sobald das Kind geantwortet hat */
-function submitAnswer(isCorrect, hinweis) {
-    if (answerLocked) return;
-    answerLocked = true;
+/* Von den Stationen aufgerufen, sobald das Kind geantwortet hat.
+
+   Rückgabe: true, wenn die Aufgabe damit erledigt ist - dann darf die
+   Station ihre Lösung zeigen. false heißt: es ist noch ein Versuch
+   offen, die Lösung bleibt verdeckt und die Station lässt das Kind
+   weiterarbeiten.
+
+   sofortAufloesen überspringt den zweiten Versuch. Das ist für Aufgaben
+   mit nur zwei Antwortmöglichkeiten gedacht, bei denen die zweite Wahl
+   zwangsläufig die richtige wäre. */
+function submitAnswer(isCorrect, hinweis, sofortAufloesen) {
+    if (answerLocked) return true;
 
     const feedback = document.getElementById('stationFeedback');
     const text = feedback.querySelector('.feedback-text');
+    feedback.style.visibility = 'visible';
 
     if (isCorrect) {
+        answerLocked = true;
         stationScore++;
         document.getElementById('stationScore').innerText = stationScore;
         feedback.className = 'feedback-area correct';
         text.innerText = pick(['Super! 🎉', 'Richtig! 👍', 'Genau! ⭐', 'Klasse! 🌟']);
-        feedback.style.visibility = 'visible';
         // etwas Zeit, um die vollständige Lösung noch zu lesen
         autoAdvanceTimeout = setTimeout(newStationTask, 1800);
-    } else {
-        feedback.className = 'feedback-area wrong';
-        text.innerText = hinweis ? 'Nicht ganz. ' + hinweis : 'Nicht ganz – schau nochmal genau hin.';
-        feedback.style.visibility = 'visible';
-        document.getElementById('stationNextBtn').style.visibility = 'visible';
+        return true;
     }
+
+    versuche++;
+
+    if (!sofortAufloesen && versuche < MAX_VERSUCHE) {
+        // Der Hinweis verrät die Lösung - er kommt erst beim zweiten Fehler
+        feedback.className = 'feedback-area nochmal';
+        text.innerText = pick(['Noch nicht ganz – versuch es nochmal! 🔁',
+                               'Fast! Probier es noch einmal. 🔁',
+                               'Schau nochmal genau hin, du hast noch einen Versuch. 🔁']);
+        return false;
+    }
+
+    answerLocked = true;
+    feedback.className = 'feedback-area wrong';
+    text.innerText = hinweis ? 'Nicht ganz. ' + hinweis : 'Nicht ganz – schau nochmal genau hin.';
+    document.getElementById('stationNextBtn').style.visibility = 'visible';
+    return true;
+}
+
+/* Bei mehrschrittigen Aufgaben zählt der Versuch pro Schritt: wer die
+   erste Lücke im zweiten Anlauf trifft, soll bei der nächsten nicht
+   schon ohne Netz dastehen. */
+function neuerSchritt() {
+    versuche = 0;
+
+    // Der Schritt ist geschafft - die Aufforderung "versuch es nochmal"
+    // soll nicht über der nächsten Lücke stehen bleiben
+    const feedback = document.getElementById('stationFeedback');
+    if (feedback && feedback.classList.contains('nochmal')) {
+        feedback.style.visibility = 'hidden';
+        feedback.className = 'feedback-area';
+        feedback.querySelector('.feedback-text').innerText = '';
+    }
+}
+
+/* Eine falsch gewählte Karte leuchtet kurz rot und wird dann wieder
+   normal. Gesperrt wird sie nicht: dieselbe Zahl kann an einer anderen
+   Stelle der Aufgabe durchaus noch die richtige sein. */
+let falschTimeouts = [];
+
+function markierungLoesen(el, klasse) {
+    if (!el) return;
+    const k = klasse || 'karte-falsch';
+    falschTimeouts.push(setTimeout(() => el.classList.remove(k), 1200));
+}
+
+function markierungenAufraeumen() {
+    falschTimeouts.forEach(clearTimeout);
+    falschTimeouts = [];
 }
 
 function endStationRound() {
@@ -515,21 +617,27 @@ function endStationRound() {
     }
 
     document.getElementById('stationProceedBtn').innerText =
-        earnedStars.every(Boolean) ? 'Zur Auswertung' : 'Zur nächsten Station';
+        alleSterneVerdient() ? 'Zur Auswertung' : 'Zur nächsten Station';
 }
 
 function proceedToNextStation() {
     const bigStar = document.getElementById('stationNewStarIcon');
     if (bigStar) bigStar.style.transform = 'scale(0)';
 
-    if (earnedStars.every(Boolean)) {
+    if (alleSterneVerdient()) {
         showScreen('resultScreen');
-        startKonfetti(150);   // alle Stationen geschafft
+        startKonfetti(150);   // alle offenen Stationen geschafft
         return;
     }
 
-    let next = (currentStationIndex + 1) % STATIONS.length;
-    while (earnedStars[next]) next = (next + 1) % STATIONS.length;
+    // Reihum durch die offenen Stationen bis zur nächsten ohne Stern
+    const offen = offeneStationen();
+    const start = offen.indexOf(currentStationIndex);
+    let next = offen[0];
+    for (let i = 1; i <= offen.length; i++) {
+        next = offen[(start + i) % offen.length];
+        if (!earnedStars[next]) break;
+    }
     openStation(next);   // auch hier darf neu gewählt werden
 }
 
@@ -558,9 +666,18 @@ function renderOptions(values, correct, labelFn, hinweis, onAnswer) {
         btn.onclick = () => {
             if (answerLocked) return;
             const ok = istRichtig(value);
+
+            // Bei nur zwei Antworten wäre der zweite Versuch geschenkt
+            if (!submitAnswer(ok, hinweis, values.length < 3)) {
+                // Noch ein Versuch: nur diese Antwort ist verbraucht
+                btn.disabled = true;
+                btn.style.backgroundColor = '#ffcdd2';
+                btn.style.boxShadow = '0 5px 0 #c62828';
+                return;
+            }
+
             markOptionButtons(btn, istRichtig, values);
             if (onAnswer) onAnswer(value, ok);
-            submitAnswer(ok, hinweis);
         };
         area.appendChild(btn);
     });
@@ -591,7 +708,9 @@ function renderCheckButton(label, onCheck) {
     btn.onclick = () => {
         if (answerLocked) return;
         btn.disabled = true;
-        onCheck();
+        // Der Knopf wird durchgereicht: bleibt ein Versuch offen, macht
+        // ihn die Station selbst wieder klickbar.
+        onCheck(btn);
     };
     area.appendChild(btn);
 }
@@ -678,9 +797,10 @@ function station1ZahlZuBild() {
     slots += '</div><p class="zs-bau-info">Gelegt: <strong id="s1BauAnzeige">0</strong> Zehnerstangen</p>';
     setTaskArea(slots);
 
-    renderCheckButton('Fertig', () => {
+    renderCheckButton('Fertig', (btn) => {
         const ok = (s1BuildCount * 10 === zahl);
-        submitAnswer(ok, zahl + ' sind ' + anzahl + ' Zehnerstangen.');
+        // Bleibt ein Versuch offen, darf weiter gelegt und neu geprüft werden
+        if (!submitAnswer(ok, zahl + ' sind ' + anzahl + ' Zehnerstangen.')) btn.disabled = false;
     });
 }
 
@@ -819,11 +939,16 @@ function station2Pick(zahl) {
 
     if (zahl !== erwartet) {
         if (karte) karte.classList.add('karte-falsch');
-        submitAnswer(false, 'Die richtige Reihenfolge wäre: ' + s2OrderTarget.join(' – '));
+        if (!submitAnswer(false, 'Die richtige Reihenfolge wäre: ' + s2OrderTarget.join(' – '))) {
+            // Noch ein Versuch: die Karte wird nach kurzem Rot wieder normal,
+            // denn sie kann für einen späteren Platz noch gebraucht werden
+            markierungLoesen(karte);
+        }
         return;
     }
 
     s2OrderPicked.push(zahl);
+    neuerSchritt();
     if (karte) {
         karte.disabled = true;
         karte.classList.add('karte-verbraucht');
@@ -950,6 +1075,11 @@ function station4Rechnen() {
    ============================================ */
 let s5Zahl = 0;
 let s5Eingabe = '';
+
+/* Die Zahl, die die Sprachausgabe gerade ansagt. Station 5 und Station 7
+   teilen sich den ganzen Ansage-Apparat; welche Zahl dran ist, steht
+   deshalb hier und nicht bei einer der beiden Stationen. */
+let ansageZahl = 0;
 let s5SprechTimeout = null;
 let s5AnsageTimeout = null;
 let s5PruefTimeout = null;
@@ -1039,7 +1169,7 @@ function spracheVerfuegbar() {
 
 /* Steht die Aufgabe überhaupt noch? Nach Ablauf der Zeit oder einem
    Wechsel dürfen nachlaufende Timer nichts mehr auslösen. */
-function station5Aktiv() {
+function stationAktiv() {
     const screen = document.getElementById('stationScreen');
     const body = document.getElementById('stationBody');
     return !!screen && screen.classList.contains('active') &&
@@ -1088,7 +1218,7 @@ function spracheAufgeben() {
     if (knopf && knopf.parentNode) {
         const ersatz = document.createElement('div');
         ersatz.className = 'hoer-ersatz';
-        ersatz.innerHTML = silbenHTML(zahlwortDE(s5Zahl));
+        ersatz.innerHTML = silbenHTML(zahlwortDE(ansageZahl));
         knopf.parentNode.replaceChild(ersatz, knopf);
     }
 
@@ -1127,7 +1257,7 @@ function sprichZahl(zahl, langsam) {
     // cancel() gestartete Ansagen verschlucken manche Browser.
     s5AnsageTimeout = setTimeout(() => {
         s5AnsageTimeout = null;
-        if (zahl !== s5Zahl || !station5Aktiv()) return;
+        if (zahl !== ansageZahl || !stationAktiv()) return;
         ansageStarten(zahl, langsam);
     }, 120);
 }
@@ -1217,7 +1347,7 @@ function station5HoerkopfHTML() {
     if (spracheVerfuegbar()) {
         return '<button class="hoer-btn" onclick="station5Vorlesen(false)">🔊 Nochmal hören</button>';
     }
-    return '<div class="hoer-ersatz">' + silbenHTML(zahlwortDE(s5Zahl)) + '</div>' +
+    return '<div class="hoer-ersatz">' + silbenHTML(zahlwortDE(ansageZahl)) + '</div>' +
            '<div class="hoer-hinweis">' + S5_HINWEIS + '</div>';
 }
 
@@ -1241,6 +1371,7 @@ function station5Zufallszahl(min, max) {
 
 function station5Aufgabe(min, max) {
     s5Zahl = station5Zufallszahl(min, max);
+    ansageZahl = s5Zahl;
     s5Eingabe = '';
 
     setInstruction('Höre gut zu und tippe die Zahl ein.');
@@ -1321,7 +1452,7 @@ function station5AnzeigeAktualisieren() {
             s5PruefTimeout = null;
             // In dieser Pause kann die Zeit abgelaufen sein – dann zählt
             // die Eingabe nicht mehr.
-            if (answerLocked || s5Eingabe !== getippt || !station5Aktiv()) return;
+            if (answerLocked || s5Eingabe !== getippt || !stationAktiv()) return;
             station5Pruefen();
         }, 350);
     }
@@ -1343,13 +1474,20 @@ function station5Pruefen() {
     if (pruefBtn) pruefBtn.disabled = true;
 
     const ok = (parseInt(s5Eingabe, 10) === s5Zahl);
+
+    if (!submitAnswer(ok, 'Das war die ' + s5Zahl + ' (' + zahlwortDE(s5Zahl) + ').')) {
+        // Noch ein Versuch: die Eingabe wird geleert, das Tastenfeld bleibt
+        // offen. station5AnzeigeAktualisieren schaltet den Prüfknopf mit.
+        s5Eingabe = '';
+        station5AnzeigeAktualisieren();
+        return;
+    }
+
     fillLuecke('s5Anzeige', s5Zahl, ok);
     if (ok) leuchteGruen('s5Anzeige');
 
     const feld = document.getElementById('s5Tastenfeld');
     if (feld) Array.from(feld.children).forEach(b => b.disabled = true);
-
-    submitAnswer(ok, 'Das war die ' + s5Zahl + ' (' + zahlwortDE(s5Zahl) + ').');
 }
 
 /* ---- Zahlbild: Zehnerstangen + Einerwürfel ---------------------- */
@@ -1409,6 +1547,7 @@ function station5Bild() {
     while (e === z) e = randomInt(1, 9);
 
     s5Zahl = z * 10 + e;
+    ansageZahl = s5Zahl;
     s5Eingabe = '';
 
     setInstruction('Höre gut zu. Welches Bild zeigt die Zahl?');
@@ -1442,7 +1581,7 @@ function station5Tastatur(e) {
     if (!document.getElementById('s5Tastenfeld') || answerLocked) return;
     // Das Tastenfeld bleibt im Hintergrund stehen, wenn das Kind die
     // Station verlässt – dann darf die Tastatur nichts mehr auslösen.
-    if (!station5Aktiv()) return;
+    if (!stationAktiv()) return;
 
     if (e.key >= '0' && e.key <= '9') {
         station5Tippe(e.key);
@@ -1599,6 +1738,14 @@ function station6Pruefen() {
     if (answerLocked || s6Einer === null || s6Zehner === null || !s6Und) return;
 
     const ok = (s6Zehner + s6Einer === s6Zahl);
+
+    if (!submitAnswer(ok, s6Zahl + ' heißt ' + zahlwortDE(s6Zahl) +
+                          ' – im Deutschen zuerst die Einer, dann die Zehner.')) {
+        // Noch ein Versuch: die gewählten Wörter bleiben stehen und
+        // können einzeln ausgetauscht werden
+        return;
+    }
+
     const richtigE = s6Zahl % 10;
     const richtigZ = s6Zahl - richtigE;
 
@@ -1629,23 +1776,39 @@ function station6Pruefen() {
         zeile.classList.add(ok ? 'ergebnis-richtig' : 'ergebnis-loesung');
         if (ok) leuchteGruen('s6Ergebnis');
     }
-
-    submitAnswer(ok, s6Zahl + ' heißt ' + zahlwortDE(s6Zahl) +
-                     ' – im Deutschen zuerst die Einer, dann die Zehner.');
 }
 
 /* ============================================
    9d. Station 7: Paare finden
-   Zahlenkarten (blauer Punkt) und Strichbild-Karten
-   (oranger Punkt) liegen gemischt auf dem Tisch.
-   Das Kind tippt eine Zahl und das passende Bild an.
+   Oben steht die gesuchte Zahl als Zahlwort in Silbenfarben, daneben
+   ein Lautsprecher - wer mag, hört sie sich zusätzlich an. Auf dem
+   Tisch liegen die Zahlenkarten und die Strichbilder. Beide Karten zur
+   gesuchten Zahl müssen gefunden werden, erst dann kommt die nächste
+   Zahl dran.
+
+   Vom Wort zur Zahl statt umgekehrt: Im Deutschen wird 47 als
+   "siebenundvierzig" gesprochen, der Einer also zuerst. Wer das Wort
+   vor sich hat und die Ziffern suchen muss, kommt an dieser Umkehrung
+   nicht vorbei. Darum liegt in jeder Runde auch ein Zahlendreher-Paar
+   auf dem Tisch - 47 und 74 nebeneinander.
+
    Strichbild: ein Strich = ein Zehner, ein Punkt = ein Einer.
    ============================================ */
-const S7_PAARE = 4;    // Paare pro Runde
+const S7_ZAHLEN = 4;   // Zahlen pro Runde
 
-let s7Karten = [];     // { id, typ: 'zahl' | 'bild', zahl, gepaart }
-let s7Auswahl = null;  // id der zuerst angetippten Karte
-let s7Offen = 0;       // noch zu findende Paare
+/* Jedes gefundene Pärchen bekommt seine eigene Farbe: das erste grün,
+   das zweite orange, dann blau und lila. So ist auf einen Blick zu
+   sehen, welche Karten zusammengehören und wie viel schon steht. */
+const S7_FARBEN = [
+    { rand: '#2E7D32', flaeche: '#C8E6C9' },   // grün
+    { rand: '#E65100', flaeche: '#FFE0B2' },   // orange
+    { rand: '#1565C0', flaeche: '#BBDEFB' },   // blau
+    { rand: '#6A1B9A', flaeche: '#E1BEE7' }    // lila
+];
+
+let s7Karten = [];   // { id, typ: 'zahl' | 'bild', zahl, gepaart, farbe }
+let s7Reihe = [];    // die Zahlen in der Reihenfolge, in der gefragt wird
+let s7Schritt = 0;   // welche Zahl gerade gesucht wird
 
 /* Strichdarstellung: Zehner als Striche, Einer als Punkte in Fünferspalten */
 function strichbildHTML(zahl) {
@@ -1683,26 +1846,70 @@ function strichbildHTML(zahl) {
     return html + '</div>';
 }
 
-function station7NewTask() {
-    const zahlen = [];
-    while (zahlen.length < S7_PAARE) {
+/* Die Zahlen einer Runde: ein Zahlendreher-Paar und zwei weitere.
+   Der Dreher ist der Kern der Übung - er kommt nicht dem Zufall
+   überlassen, sondern liegt in jeder Runde dabei. */
+/* Die Zahlen einer Runde: ein Zahlendreher-Paar und zwei weitere.
+   Der Dreher ist der Kern der Übung - er bleibt nicht dem Zufall
+   überlassen, sondern liegt in jeder Runde dabei. */
+function station7Zahlen() {
+    const z = randomInt(1, 9);
+    let e = randomInt(1, 9);
+    while (e === z) e = randomInt(1, 9);
+
+    const zahlen = [z * 10 + e, e * 10 + z];
+    while (zahlen.length < S7_ZAHLEN) {
         const zahl = randomInt(11, 99);
         if (zahlen.indexOf(zahl) === -1) zahlen.push(zahl);
     }
+    return zahlen;
+}
+
+/* Die gesuchte Zahl über dem Kartenfeld: das Zahlwort in Silbenfarben.
+   Der Lautsprecher daneben ist ein Angebot - gelesen werden kann es
+   auch ohne ihn. Kann der Browser nicht vorlesen, bleibt er einfach weg. */
+function station7VorgabeZeigen() {
+    const feld = document.getElementById('s7Vorgabe');
+    if (!feld) return;
+
+    const zahl = s7Reihe[s7Schritt];
+    ansageZahl = zahl;   // der Lautsprecher sagt immer die gesuchte Zahl an
+
+    feld.innerHTML =
+        '<span class="paar-such-wort">' + silbenHTML(zahlwortDE(zahl)) + '</span>' +
+        (spracheVerfuegbar()
+            ? '<button class="paar-hoer-btn" onclick="station7Vorlesen()" ' +
+              'title="Zahlwort vorlesen">🔊</button>'
+            : '');
+}
+
+function station7Vorlesen() {
+    ansageZahl = s7Reihe[s7Schritt];
+    sprichZahl(ansageZahl, false);
+}
+
+function station7NewTask() {
+    const zahlen = station7Zahlen();
 
     s7Karten = [];
     zahlen.forEach((zahl, i) => {
-        s7Karten.push({ id: 'z' + i, typ: 'zahl', zahl: zahl, gepaart: false });
-        s7Karten.push({ id: 'b' + i, typ: 'bild', zahl: zahl, gepaart: false });
+        s7Karten.push({ id: 'z' + i, typ: 'zahl', zahl: zahl, gepaart: false, farbe: 0 });
+        s7Karten.push({ id: 'b' + i, typ: 'bild', zahl: zahl, gepaart: false, farbe: 0 });
     });
     s7Karten = shuffle(s7Karten);
-    s7Auswahl = null;
-    s7Offen = S7_PAARE;
+    s7Reihe = shuffle(zahlen.slice());
+    s7Schritt = 0;
 
-    setInstruction('Finde die Paare: Welches Bild gehört zu welcher Zahl?');
+    setInstruction('Lies das Zahlwort – oder hör es dir an. ' +
+                   'Finde die Zahl und das passende Bild dazu.');
 
     const farbe = 'var(--color-' + STATIONS[currentStationIndex].color + ')';
-    let html = '<div class="paar-feld" style="--paar-farbe: ' + farbe + ';">';
+    let html = '<div class="paar-suche" style="--paar-farbe: ' + farbe + ';">' +
+               '<span class="paar-such-label">Gesucht:</span>' +
+               '<span id="s7Vorgabe" class="paar-such-karte"></span>' +
+               '</div>';
+
+    html += '<div class="paar-feld" style="--paar-farbe: ' + farbe + ';">';
     s7Karten.forEach(karte => {
         // leichte Drehung, damit die Karten wie hingelegt wirken
         const dreh = randomInt(-40, 40) / 10;
@@ -1717,6 +1924,8 @@ function station7NewTask() {
                 '</button>';
     });
     setTaskArea(html + '</div>');
+
+    station7VorgabeZeigen();
 }
 
 function station7Tippe(id) {
@@ -1725,71 +1934,72 @@ function station7Tippe(id) {
     const karte = s7Karten.find(k => k.id === id);
     if (!karte || karte.gepaart) return;
 
-    // Nochmal auf dieselbe Karte tippen = Auswahl wieder aufheben
-    if (s7Auswahl === id) {
-        s7Auswahl = null;
-        station7Markieren();
-        return;
-    }
+    const ziel = s7Reihe[s7Schritt];
+    if (karte.zahl !== ziel) { station7Fehler(karte, ziel); return; }
 
-    const erste = s7Auswahl ? s7Karten.find(k => k.id === s7Auswahl) : null;
-
-    // Noch nichts gewählt oder nochmal dieselbe Sorte: die Auswahl wandert
-    // einfach mit – zwei Zahlen oder zwei Bilder sind kein Fehlversuch.
-    if (!erste || erste.typ === karte.typ) {
-        s7Auswahl = id;
-        station7Markieren();
-        return;
-    }
-
-    if (erste.zahl === karte.zahl) station7Treffer(erste, karte);
-    else station7Fehler(erste, karte);
-}
-
-function station7Treffer(a, b) {
-    a.gepaart = true;
-    b.gepaart = true;
-    s7Auswahl = null;
-    s7Offen--;
+    karte.gepaart = true;
+    karte.farbe = s7Schritt;   // beide Karten eines Pärchens tragen dieselbe
     station7Markieren();
 
-    if (s7Offen === 0) {
-        // letztes Paar: die Runde ist geschafft
-        submitAnswer(true);
-    } else {
-        // Zwischenpaare zählen sofort einen Punkt
-        stationScore++;
-        document.getElementById('stationScore').innerText = stationScore;
+    // Erst wenn beide Karten zur gesuchten Zahl liegen, ist sie geschafft
+    if (s7Karten.some(k => k.zahl === ziel && !k.gepaart)) {
+        neuerSchritt();
+        return;
     }
+
+    s7Schritt++;
+    if (s7Schritt >= s7Reihe.length) {
+        submitAnswer(true);   // die letzte Zahl: die Runde ist geschafft
+        return;
+    }
+
+    // Zahlen zwischendurch zählen sofort einen Punkt
+    neuerSchritt();
+    stationScore++;
+    document.getElementById('stationScore').innerText = stationScore;
+    station7VorgabeZeigen();
 }
 
-function station7Fehler(a, b) {
-    const bild = (a.typ === 'bild') ? a : b;
-    const z = Math.floor(bild.zahl / 10);
-    const e = bild.zahl % 10;
+function station7Fehler(karte, ziel) {
+    const el = document.getElementById('s7' + karte.id);
+    if (el) el.classList.add('paar-falsch');
 
-    [a, b].forEach(k => {
-        const el = document.getElementById('s7' + k.id);
-        if (el) el.classList.add('paar-falsch');
+    const z = Math.floor(ziel / 10);
+    const e = ziel % 10;
+
+    if (!submitAnswer(false, 'Gesucht ist ' + zahlwortDE(ziel) + ', also die ' + ziel +
+                             ': ' + z + ' Zehner und ' + e + ' Einer.')) {
+        // Noch ein Versuch: die Karte wird wieder normal
+        markierungLoesen(el, 'paar-falsch');
+        return;
+    }
+
+    // Aufgelöst: die beiden gesuchten Karten heben sich hervor ...
+    s7Karten.forEach(k => {
+        if (k.zahl !== ziel) return;
+        const treffer = document.getElementById('s7' + k.id);
+        if (treffer) treffer.classList.add('paar-gesucht');
     });
 
-    // Zu den offenen Bildern die Zahl einblenden – die Lösung steht danach da
+    // ... und auf jeder offenen Bildkarte steht ihre Zahl
     s7Karten.forEach(k => {
         if (k.typ !== 'bild' || k.gepaart) return;
-        const el = document.getElementById('s7L' + k.id);
-        if (el) el.textContent = k.zahl;
+        const loesung = document.getElementById('s7L' + k.id);
+        if (loesung) loesung.textContent = k.zahl;
     });
-
-    s7Auswahl = null;
-    submitAnswer(false, 'Das Bild zeigt ' + z + ' Zehner und ' + e + ' Einer, also ' + bild.zahl + '.');
 }
 
-/* Auswahl und gefundene Paare auf den Karten anzeigen */
+/* Gefundene Karten in der Farbe ihres Pärchens färben und sperren */
 function station7Markieren() {
     s7Karten.forEach(karte => {
         const el = document.getElementById('s7' + karte.id);
         if (!el) return;
-        el.classList.toggle('gewaehlt', s7Auswahl === karte.id);
+
+        if (karte.gepaart) {
+            const farbe = S7_FARBEN[karte.farbe % S7_FARBEN.length];
+            el.style.setProperty('--fund-rand', farbe.rand);
+            el.style.setProperty('--fund-flaeche', farbe.flaeche);
+        }
         el.classList.toggle('paar-gefunden', karte.gepaart);
         el.disabled = karte.gepaart;
     });
@@ -1877,14 +2087,18 @@ function station8Pick(wert, btn) {
 
     if (wert !== s8Ziele[s8Schritt]) {
         btn.classList.add('karte-falsch');
+        if (!submitAnswer(false, s8Zahl + ' = ' + s8Ziele[1] + ' + ' + s8Ziele[2] +
+                                 '. Die blaue Karte sind die Zehner, die rote die Einer.')) {
+            markierungLoesen(btn);
+            return;
+        }
         // Die vollständige Zerlegung steht danach einmal komplett da
         for (let i = s8Schritt; i < 3; i++) fillLuecke('s8L' + i, s8Ziele[i], false);
         station8Markieren();
-        submitAnswer(false, s8Zahl + ' = ' + s8Ziele[1] + ' + ' + s8Ziele[2] +
-                            '. Die blaue Karte sind die Zehner, die rote die Einer.');
         return;
     }
 
+    neuerSchritt();
     fillLuecke('s8L' + s8Schritt, wert, true);
     btn.disabled = true;
     btn.classList.add('karte-verbraucht');
@@ -2069,10 +2283,13 @@ function station10Pick(zahl) {
     if (zahl !== erwartet) {
         const karte = document.getElementById('s10V' + zahl);
         if (karte) karte.classList.add('karte-falsch');
-        submitAnswer(false, 'Die richtige Reihenfolge wäre: ' + s10Ziel.join(' – '));
+        if (!submitAnswer(false, 'Die richtige Reihenfolge wäre: ' + s10Ziel.join(' – '))) {
+            markierungLoesen(karte);
+        }
         return;
     }
 
+    neuerSchritt();
     s10Gehaengt.push(zahl);
     station10Zeichnen();
 
@@ -2080,20 +2297,1063 @@ function station10Pick(zahl) {
 }
 
 /* ============================================
+   9h. Stationen 11-13: Hunderterfeld und Hundertertafel
+   Drei Sichtweisen auf dasselbe Hundert:
+   - Station 11: das Punktefeld zeigt eine Menge ("wie viele sind es?")
+   - Station 12: die Tafel zeigt, wo jede Zahl wohnt
+   - Station 13: Ausschnitte, Nachbarn und Wege in der Tafel
+   Die drei Stationen teilen sich die Bausteine dieses Abschnitts -
+   Aufgaben mit Lücken laufen alle über htPick().
+   ============================================ */
+
+/* ---------- Baustein: Punktefeld (Hunderterfeld) ---------- */
+
+/* 100 Punkte in 10 Reihen. Nach dem fünften Punkt und nach der fünften
+   Reihe kommt eine größere Lücke - so bleibt die Fünfereinteilung
+   ("Kraft der 5") sichtbar und das Kind muss nicht einzeln abzählen. */
+function hunderterfeldHTML(zahl) {
+    let html = '<div class="hunderterfeld">';
+    for (let reihe = 0; reihe < 10; reihe++) {
+        html += '<div class="hf-reihe">';
+        for (let spalte = 0; spalte < 10; spalte++) {
+            const nummer = reihe * 10 + spalte + 1;
+            html += '<span class="hf-punkt' + (nummer <= zahl ? ' hf-voll' : '') + '"></span>';
+        }
+        html += '</div>';
+    }
+    return html + '</div>';
+}
+
+/* Zehner-Marken am Rand: 10, 20, 30 ... als Zählhilfe.
+   Beziffert werden nur die vollen Reihen - dann steht dort genau die
+   Zehnerzahl, zu der die letzten Punkte noch dazukommen. Die leeren
+   Marken bleiben stehen, damit die Reihen ausgerichtet bleiben. */
+function hunderterMarkenHTML(zahl) {
+    let html = '<div class="hf-marken" aria-hidden="true">';
+    for (let i = 1; i <= 10; i++) {
+        html += '<span class="hf-marke">' + (i * 10 <= zahl ? (i * 10) : '') + '</span>';
+    }
+    return html + '</div>';
+}
+
+function hunderterfeldBereichHTML(zahl) {
+    return '<div class="hf-bereich" id="hfBereich">' +
+           hunderterfeldHTML(zahl) + hunderterMarkenHTML(zahl) + '</div>';
+}
+
+function hunderterHilfeHTML() {
+    return '<div class="hilfe-bereich" style="--hilfe-farbe: ' + htFarbe() + ';">' +
+           '<button class="hilfe-btn" id="hfHilfeBtn" onclick="toggleHunderterHilfe()">' +
+           '🔢 Zehner zeigen</button></div>';
+}
+
+/* Die Marken sind zu Beginn jeder Aufgabe wieder aus: erst selbst in
+   Reihen denken, die Hilfe nur bei Bedarf dazuschalten. */
+function toggleHunderterHilfe() {
+    const bereich = document.getElementById('hfBereich');
+    const btn = document.getElementById('hfHilfeBtn');
+    if (!bereich || !btn) return;
+
+    const zeigen = !bereich.classList.contains('marken-sichtbar');
+    bereich.classList.toggle('marken-sichtbar', zeigen);
+    btn.classList.toggle('aktiv', zeigen);
+    btn.textContent = zeigen ? '🔢 Zehner ausblenden' : '🔢 Zehner zeigen';
+}
+
+/* Nach der Antwort die Marken einblenden - dann steht neben dem Feld,
+   warum es genau diese Zahl war. */
+function hunderterMarkenZeigen() {
+    const bereich = document.getElementById('hfBereich');
+    if (bereich && !bereich.classList.contains('marken-sichtbar')) toggleHunderterHilfe();
+}
+
+/* Ablenker sind genau die Verwechslungen, um die es beim Ablesen geht:
+   Ziffern vertauscht (74 statt 47), eine Reihe zu viel oder zu wenig,
+   ein Punkt daneben. */
+function hunderterOptionen(zahl) {
+    const z = Math.floor(zahl / 10);
+    const e = zahl % 10;
+    const optionen = [zahl];
+
+    const vertauscht = e * 10 + z;
+    if (vertauscht >= 1 && vertauscht !== zahl) optionen.push(vertauscht);
+
+    shuffle([zahl + 10, zahl - 10, zahl + 1, zahl - 1]).forEach(k => {
+        if (optionen.length < 4 && k >= 1 && k <= 100 && optionen.indexOf(k) === -1) {
+            optionen.push(k);
+        }
+    });
+    return shuffle(optionen);
+}
+
+/* ---------- Baustein: Hundertertafel ---------- */
+
+/* Die Tafel ist zeilenweise gefüllt: 1-10, 11-20, ... 91-100.
+   Zeile und Spalte werden ab 1 gezählt, wie das Kind sie abzählt. */
+function htZeile(zahl)  { return Math.ceil(zahl / 10); }
+function htSpalte(zahl) { return ((zahl - 1) % 10) + 1; }
+
+function htFarbe() {
+    return 'var(--color-' + STATIONS[currentStationIndex].color + ')';
+}
+
+/* Die Tafel mit 100 Feldern. zelleFn bestimmt, wie ein einzelnes Feld
+   aussieht - so bauen alle Aufgaben dieselbe Tafel unterschiedlich auf. */
+function htTafelHTML(zelleFn) {
+    let zellen = '';
+    for (let zahl = 1; zahl <= 100; zahl++) zellen += zelleFn(zahl);
+    return '<div class="hundertertafel">' + zellen + '</div>';
+}
+
+function htSchlichteTafelHTML() {
+    return htTafelHTML(zahl => '<span class="ht-zelle">' + zahl + '</span>');
+}
+
+function htBereichHTML(inhalt) {
+    return '<div class="ht-bereich" style="--ht-farbe: ' + htFarbe() + ';">' + inhalt + '</div>';
+}
+
+/* Die gesuchte Zahl groß neben der Tafel. Beim Abzählen von Zeile und
+   Spalte soll das Kind nicht in den Aufgabentext zurückspringen müssen -
+   und schon gar nicht die Zahl aus dem Gedächtnis holen. */
+function htTafelMitZahlHTML(tafel, zahl, label) {
+    return '<div class="ht-mit-zahl">' + tafel +
+           '<div class="ht-suchzahl">' +
+           '<span class="ht-suchzahl-label">' + (label || 'Gesucht') + '</span>' +
+           '<span class="ht-suchzahl-wert">' + zahl + '</span>' +
+           '</div></div>';
+}
+
+/* Zuschaltbare Hilfe im Stil der Zehnerstangen-Hilfe. Die Beschriftung
+   steckt am Knopf, damit der Umschalter für jede Hilfe derselbe ist. */
+function htHilfeHTML(inhalt, ausLabel, anLabel) {
+    return '<div class="hilfe-bereich" style="--hilfe-farbe: ' + htFarbe() + ';">' +
+           '<button class="hilfe-btn" id="htHilfeBtn" data-aus="' + ausLabel + '" ' +
+           'data-an="' + anLabel + '" onclick="htHilfeToggle()">' + ausLabel + '</button>' +
+           '<div class="hilfe-inhalt" id="htHilfe">' + inhalt + '</div></div>';
+}
+
+function htHilfeToggle() {
+    const box = document.getElementById('htHilfe');
+    const btn = document.getElementById('htHilfeBtn');
+    if (!box || !btn) return;
+
+    const zeigen = !box.classList.contains('sichtbar');
+    box.classList.toggle('sichtbar', zeigen);
+    btn.classList.toggle('aktiv', zeigen);
+    btn.textContent = zeigen ? btn.dataset.an : btn.dataset.aus;
+}
+
+/* ---------- Baustein: der Lerncoach ---------- */
+
+/* Der Coach sagt nichts vor - er legt das leere Raster der
+   Hundertertafel daneben, in dem das Kind Zeilen und Spalten abzählt.
+   Zwei Schalter beschriften den Rand: die Einer über den Spalten,
+   die Zehner neben den Zeilen. Die volle Tafel gibt es erst bei der
+   Auflösung - vorher stünde die Antwort schon da. */
+let coachOffen = false;
+let coachEiner = false;    // Einerziffern über den Spalten
+let coachZehner = false;   // Zehner neben den Zeilen
+
+const COACH_ZU  = '🧑‍🏫 Der Lerncoach hilft';
+const COACH_AUF = '🧑‍🏫 Lerncoach zumachen';
+
+/* Zu Beginn jeder Aufgabe ist der Coach wieder zu - erst selbst
+   überlegen, das Raster nur bei Bedarf dazuholen. */
+function coachZuruecksetzen() {
+    coachOffen = false;
+    coachEiner = false;
+    coachZehner = false;
+}
+
+/* Die Tafel im Coach bleibt leer: sie ist ein Raster zum Abzählen und
+   kein Nachschlagewerk - mit allen Zahlen darin stünde die Antwort
+   schon da. Dazuschalten lässt sich die Beschriftung des Randes:
+   die Einerziffer über jeder Spalte, der Zehner neben jeder Zeile. */
+function coachTafelHTML() {
+    let html = '<div class="ht-beschriftet">';
+
+    if (coachEiner) {
+        html += '<div class="ht-kopf">';
+        for (let spalte = 1; spalte <= 10; spalte++) {
+            const einer = spalte % 10;
+            html += '<span class="ht-randmarke' + (einer === 0 ? ' ht-randmarke-null' : '') +
+                    '">' + einer + '</span>';
+        }
+        html += '</div>';
+    }
+
+    if (coachZehner) {
+        html += '<div class="ht-seite">';
+        for (let zehner = 0; zehner <= 9; zehner++) {
+            html += '<span class="ht-randmarke">' + zehner + '</span>';
+        }
+        html += '</div>';
+    }
+
+    return html + htTafelHTML(() => '<span class="ht-zelle"></span>') + '</div>';
+}
+
+function lerncoachHTML() {
+    return '<div class="coach" style="--coach-farbe: ' + htFarbe() + ';">' +
+           '<button class="coach-btn' + (coachOffen ? ' aktiv' : '') + '" ' +
+           'id="coachBtn" onclick="coachToggle()">' +
+           (coachOffen ? COACH_AUF : COACH_ZU) + '</button>' +
+           '<div class="coach-panel' + (coachOffen ? ' sichtbar' : '') + '" id="coachPanel">' +
+           coachInhaltHTML() + '</div></div>';
+}
+
+function coachInhaltHTML() {
+    let hinweis = '';
+    if (coachEiner) {
+        hinweis += 'Oben steht über jeder Spalte ihre <strong>Einerziffer</strong>. ' +
+                   'Zahlen mit einer <strong>0</strong> am Ende stehen ganz rechts außen. ';
+    }
+    if (coachZehner) {
+        hinweis += 'Links steht neben jeder Zeile ihr <strong>Zehner</strong>.';
+    }
+
+    return '<p class="coach-text">Zähle im Raster nach: die <strong>Zeilen</strong> ' +
+           'von oben, die <strong>Spalten</strong> von links.</p>' +
+           '<div class="coach-schalter-reihe">' +
+           '<button class="coach-schalter' + (coachEiner ? ' aktiv' : '') + '" ' +
+           'onclick="coachEinerToggle()">1️⃣ Einer ' +
+           (coachEiner ? 'ausblenden' : 'zeigen') + '</button>' +
+           '<button class="coach-schalter' + (coachZehner ? ' aktiv' : '') + '" ' +
+           'onclick="coachZehnerToggle()">🔟 Zehner ' +
+           (coachZehner ? 'ausblenden' : 'zeigen') + '</button>' +
+           '</div>' +
+           (hinweis ? '<p class="coach-hinweis">' + hinweis + '</p>' : '') +
+           coachTafelHTML();
+}
+
+function coachToggle() {
+    coachOffen = !coachOffen;
+    coachAktualisieren();
+}
+
+function coachEinerToggle() {
+    coachEiner = !coachEiner;
+    coachAktualisieren();
+}
+
+function coachZehnerToggle() {
+    coachZehner = !coachZehner;
+    coachAktualisieren();
+}
+
+/* Neu gezeichnet wird nur der Coach: die Aufgabe darüber bleibt so
+   stehen, wie sie ist. */
+function coachAktualisieren() {
+    const panel = document.getElementById('coachPanel');
+    const btn = document.getElementById('coachBtn');
+    if (!panel || !btn) return;
+
+    panel.classList.toggle('sichtbar', coachOffen);
+    btn.classList.toggle('aktiv', coachOffen);
+    btn.textContent = coachOffen ? COACH_AUF : COACH_ZU;
+    panel.innerHTML = coachInhaltHTML();
+}
+
+/* ---------- Baustein: Lücken füllen mit Kartenvorrat ---------- */
+
+let htFragen = [];      // fehlende Zahlen, in der Reihenfolge, in der gefragt wird
+let htGefuellt = [];    // schon richtig eingesetzte Zahlen
+let htSchritt = 0;      // welche Lücke gerade dran ist
+let htKarten = [];      // Vorrat unter der Aufgabe
+let htZeichnen = null;  // Ansicht der aktuellen Aufgabe
+let htAufgeloest = false;
+
+function htStart(fragen, karten, zeichnen) {
+    htFragen = fragen;
+    htKarten = karten;
+    htGefuellt = [];
+    htSchritt = 0;
+    htAufgeloest = false;
+    htZeichnen = zeichnen;
+}
+
+function htKartenHTML() {
+    let html = '<div class="ht-vorrat">';
+    htKarten.forEach(zahl => {
+        const weg = (htGefuellt.indexOf(zahl) !== -1);
+        html += '<button class="ht-karte' + (weg ? ' karte-verbraucht' : '') +
+                '" id="htK' + zahl + '"' + (weg ? ' disabled' : '') +
+                ' onclick="htPick(' + zahl + ')">' + zahl + '</button>';
+    });
+    return html + '</div>';
+}
+
+/* Wie eine Lücke aussieht: noch offen, gerade gefragt, selbst gefüllt
+   oder nach einem Fehler aufgelöst. */
+function htLueckeHTML(zahl) {
+    if (htGefuellt.indexOf(zahl) !== -1) {
+        return '<span class="ht-zelle ht-gefuellt">' + zahl + '</span>';
+    }
+    if (htAufgeloest) {
+        return '<span class="ht-zelle ht-loesung">' + zahl + '</span>';
+    }
+    const dran = (zahl === htFragen[htSchritt]);
+    return '<span class="ht-zelle ht-luecke' + (dran ? ' ht-dran' : '') + '">' +
+           (dran ? '?' : '') + '</span>';
+}
+
+function htPick(zahl) {
+    if (answerLocked) return;
+    if (htGefuellt.indexOf(zahl) !== -1) return;
+
+    const gesucht = htFragen[htSchritt];
+
+    if (zahl !== gesucht) {
+        if (!submitAnswer(false, 'In das gesuchte Feld gehört die ' + gesucht + '.')) {
+            // Noch ein Versuch: die Karte leuchtet nur kurz rot und bleibt im
+            // Vorrat - sie kann für eine andere Lücke die richtige sein
+            markierungLoesen(document.getElementById('htK' + zahl));
+            return;
+        }
+        // Alle offenen Lücken auflösen: die Aufgabe steht danach einmal vollständig da
+        htAufgeloest = true;
+        htZeichnen();
+        const karte = document.getElementById('htK' + zahl);
+        if (karte) karte.classList.add('karte-falsch');
+        return;
+    }
+
+    htGefuellt.push(zahl);
+    htSchritt++;
+    htZeichnen();
+
+    if (htSchritt === htFragen.length) {
+        submitAnswer(true);
+    } else {
+        // Jede gefüllte Lücke zählt sofort - eine Aufgabe hat mehrere davon
+        neuerSchritt();
+        stationScore++;
+        document.getElementById('stationScore').innerText = stationScore;
+    }
+}
+
+/* Ablenker für den Vorrat: Nachbarn der gesuchten Zahlen, die selbst
+   nicht in der Aufgabe stehen - also genau die Zahlen, die man um eins,
+   um einen Zehner oder schräg daneben greift. */
+function htStoerer(belegt, luecken, anzahl) {
+    const kandidaten = [];
+    luecken.forEach(zahl => {
+        [zahl - 11, zahl - 10, zahl - 9, zahl - 1,
+         zahl + 1, zahl + 9, zahl + 10, zahl + 11].forEach(k => kandidaten.push(k));
+    });
+
+    const stoerer = [];
+    shuffle(kandidaten).forEach(k => {
+        if (stoerer.length < anzahl && k >= 1 && k <= 100 &&
+            belegt.indexOf(k) === -1 && stoerer.indexOf(k) === -1) {
+            stoerer.push(k);
+        }
+    });
+    return stoerer;
+}
+
+/* ============================================
+   Station 11: Hunderterfeld
+   ============================================ */
+
+/* ---------- Welche Zahl ist dargestellt? ---------- */
+
+function station11Ablesen() {
+    const zahl = randomInt(11, 99);
+    const z = Math.floor(zahl / 10);
+    const e = zahl % 10;
+
+    setInstruction('Welche Zahl ist im Hunderterfeld dargestellt?');
+    setTaskArea(hunderterfeldBereichHTML(zahl) + hunderterHilfeHTML());
+
+    const hinweis = (e === 0)
+        ? 'Es sind ' + z + ' volle Reihen, also ' + zahl + '.'
+        : 'Es sind ' + z + ' volle Reihen (' + (z * 10) + ') und ' + e +
+          ' Punkte mehr, also ' + zahl + '.';
+
+    renderOptions(hunderterOptionen(zahl), zahl, null, hinweis, hunderterMarkenZeigen);
+}
+
+/* ---------- Zahl selbst legen ---------- */
+
+/* Gebaut wird mit +10 und +1, nicht Punkt für Punkt: so entsteht die
+   Zahl aus Zehnern und Einern und nicht durch Abzählen. */
+let s11Ziel = 0;
+let s11Gelegt = 0;
+
+function station11Legen() {
+    s11Ziel = randomInt(11, 99);
+    s11Gelegt = 0;
+
+    setInstruction('Lege die Zahl <strong>' + s11Ziel + '</strong> im Hunderterfeld.');
+    setTaskArea(
+        hunderterfeldBereichHTML(0) +
+        '<div class="hf-tasten">' +
+        '<button class="hf-taste" onclick="station11LegenSchritt(10)">+10</button>' +
+        '<button class="hf-taste" onclick="station11LegenSchritt(1)">+1</button>' +
+        '<button class="hf-taste" onclick="station11LegenSchritt(-1)">−1</button>' +
+        '<button class="hf-taste" onclick="station11LegenSchritt(-10)">−10</button>' +
+        '</div>' + hunderterHilfeHTML()
+    );
+
+    renderCheckButton('Fertig ✓', station11LegenPruefen);
+}
+
+/* Nur die Punkte umfärben statt das Feld neu zu bauen - sonst würde bei
+   jedem Tastendruck die eingeblendete Zehner-Hilfe wieder verschwinden. */
+function station11LegenSchritt(delta) {
+    if (answerLocked) return;
+    s11Gelegt = Math.min(100, Math.max(0, s11Gelegt + delta));
+    station11LegenAktualisieren();
+}
+
+function station11LegenAktualisieren() {
+    document.querySelectorAll('#hfBereich .hf-punkt').forEach((el, i) => {
+        el.classList.toggle('hf-voll', i < s11Gelegt);
+    });
+    document.querySelectorAll('#hfBereich .hf-marke').forEach((el, i) => {
+        const zehner = (i + 1) * 10;
+        el.textContent = (zehner <= s11Gelegt) ? zehner : '';
+    });
+}
+
+function station11LegenPruefen(btn) {
+    const richtig = (s11Gelegt === s11Ziel);
+    const gelegt = s11Gelegt;
+
+    if (!submitAnswer(richtig, 'Du hast ' + gelegt + ' gelegt, gesucht war ' + s11Ziel + '.')) {
+        // Noch ein Versuch: das Gelegte bleibt stehen und kann mit den
+        // Tasten verbessert werden
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    // Bei einem Fehler das Feld auf die gesuchte Zahl bringen,
+    // damit die richtige Darstellung einmal dasteht
+    if (!richtig) {
+        s11Gelegt = s11Ziel;
+        station11LegenAktualisieren();
+    }
+    hunderterMarkenZeigen();
+}
+
+/* ============================================
+   Station 12: Hundertertafel
+   ============================================ */
+
+/* ---------- Wo wohnt die Zahl? ---------- */
+
+/* Die Tafel ist leer bis auf die vier Eckzahlen - so wie die leere
+   Hundertertafel im Heft. Über die Ecken findet das Kind die Zeile
+   und die Spalte, in der die Zahl stehen muss. */
+const HT_ECKEN = [1, 10, 91, 100];
+
+let s12Ziel = 0;
+let s12Getippt = 0;
+let s12Falsch = [];        // im ersten Anlauf danebengetippte Felder
+let s12ZehnerAn = false;   // Zählhilfe: die Zehnerzahlen am rechten Rand
+
+/* Gesucht wird nie eine Zahl der Zehnerspalte: sonst bliebe dort mit
+   eingeschalteter Hilfe genau ein Feld frei und verriete die Lösung. */
+function station12Wohnort() {
+    do {
+        s12Ziel = randomInt(1, 100);
+    } while (HT_ECKEN.indexOf(s12Ziel) !== -1 || htSpalte(s12Ziel) === 10);
+    s12Getippt = 0;
+    s12Falsch = [];
+    s12ZehnerAn = false;   // die Hilfe startet bei jeder Aufgabe wieder aus
+
+    setInstruction('Wo wohnt diese Zahl in der Hundertertafel? Tippe das Feld an.');
+    station12WohnortZeichnen();
+}
+
+/* Sichtbar sind die vier Eckzahlen - und auf Wunsch die Zehnerzahlen
+   am rechten Rand, mit denen sich die Zeile abzählen lässt. */
+function station12WohnortZeichnen() {
+    const html = htTafelHTML(zahl => {
+        // Danebengetippt: das Feld bleibt rot stehen und zeigt seine Zahl.
+        // Das ist die eigentliche Lehre des Fehlversuchs - hier wohnt eben
+        // die 63 und nicht die 89.
+        if (s12Falsch.indexOf(zahl) !== -1) {
+            return '<span class="ht-zelle ht-daneben">' + zahl + '</span>';
+        }
+
+        if (s12Getippt) {
+            if (zahl === s12Ziel) {
+                return '<span class="ht-zelle ' +
+                       (s12Getippt === s12Ziel ? 'ht-gefuellt' : 'ht-loesung') + '">' + zahl + '</span>';
+            }
+            if (zahl === s12Getippt) {
+                return '<span class="ht-zelle ht-daneben">' + zahl + '</span>';
+            }
+        }
+
+        const vorgegeben = HT_ECKEN.indexOf(zahl) !== -1 ||
+                           (s12ZehnerAn && htSpalte(zahl) === 10);
+        if (vorgegeben) return '<span class="ht-zelle ht-ecke">' + zahl + '</span>';
+
+        if (!s12Getippt) {
+            return '<button class="ht-zelle ht-feld" ' +
+                   'onclick="station12WohnortTippe(' + zahl + ')"></button>';
+        }
+        return '<span class="ht-zelle"></span>';
+    });
+
+    setTaskArea(htBereichHTML(htTafelMitZahlHTML(html, s12Ziel)) +
+        '<div class="hilfe-bereich" style="--hilfe-farbe: ' + htFarbe() + ';">' +
+        '<button class="hilfe-btn' + (s12ZehnerAn ? ' aktiv' : '') +
+        '" onclick="station12ZehnerToggle()">' +
+        (s12ZehnerAn ? '🔢 Zehnerzahlen ausblenden' : '🔢 Zehnerzahlen zeigen') +
+        '</button></div>');
+}
+
+function station12ZehnerToggle() {
+    s12ZehnerAn = !s12ZehnerAn;
+    station12WohnortZeichnen();
+}
+
+function station12WohnortTippe(zahl) {
+    if (answerLocked) return;
+
+    const hinweis = 'Die ' + s12Ziel + ' steht in Zeile ' + htZeile(s12Ziel) +
+                    ' und Spalte ' + htSpalte(s12Ziel) + '.';
+
+    if (!submitAnswer(zahl === s12Ziel, hinweis)) {
+        // Noch ein Versuch: das gesuchte Feld bleibt verdeckt
+        if (s12Falsch.indexOf(zahl) === -1) s12Falsch.push(zahl);
+        station12WohnortZeichnen();
+        return;
+    }
+
+    s12Getippt = zahl;
+    station12WohnortZeichnen();
+}
+
+/* ---------- Fehlende Zahlen ergänzen ---------- */
+
+const HT_TAFEL_LUECKEN = 6;
+
+function station12Luecken() {
+    const luecken = [];
+    while (luecken.length < HT_TAFEL_LUECKEN) {
+        const zahl = randomInt(1, 100);
+        if (luecken.indexOf(zahl) === -1) luecken.push(zahl);
+    }
+
+    // Gefragt wird bewusst nicht der Reihe nach: sonst könnte das Kind die
+    // Karten einfach der Größe nach ablegen, ohne in die Tafel zu schauen.
+    htStart(luecken, shuffle(luecken), station12LueckenZeichnen);
+
+    setInstruction('In der Hundertertafel fehlen Zahlen. ' +
+                   'Welche Zahl gehört in das Feld mit dem <strong>?</strong>');
+    station12LueckenZeichnen();
+}
+
+function station12LueckenZeichnen() {
+    const html = htTafelHTML(zahl => (htFragen.indexOf(zahl) === -1)
+        ? '<span class="ht-zelle">' + zahl + '</span>'
+        : htLueckeHTML(zahl));
+    setTaskArea(htBereichHTML(html + htKartenHTML()));
+}
+
+/* ---------- Zeile und Spalte ---------- */
+
+/* Ein kleines Schaubild, das immer dasteht: links eine Zeile quer,
+   rechts eine Spalte senkrecht - eingefärbt wie später die Auflösung
+   in der großen Tafel. Die gerade gefragte Seite ist hervorgehoben,
+   die andere bleibt zum Vergleich sichtbar. */
+function zeileSpalteBildHTML(nachZeile) {
+    const spalten = 5;
+    const reihen = 4;
+
+    function mini(quer) {
+        let felder = '';
+        for (let r = 0; r < reihen; r++) {
+            for (let s = 0; s < spalten; s++) {
+                // die zweite Zeile bzw. die vierte Spalte ist die eingefärbte
+                const markiert = quer ? (r === 1) : (s === 3);
+                felder += '<span class="zsp-feld' + (markiert ? ' zsp-markiert' : '') + '"></span>';
+            }
+        }
+        return '<div class="zsp-mini" style="--zsp-spalten: ' + spalten + ';">' + felder + '</div>';
+    }
+
+    function karte(quer) {
+        const aktiv = (quer === nachZeile);
+        return '<div class="zsp-karte' + (aktiv ? ' zsp-aktiv' : '') + '">' +
+               mini(quer) +
+               '<span class="zsp-label">' + (quer ? 'Zeile' : 'Spalte') + '</span>' +
+               '<span class="zsp-pfeil">' + (quer ? '➡' : '⬇') + '</span>' +
+               '<span class="zsp-wie">' + (quer ? 'quer' : 'von oben nach unten') + '</span>' +
+               '</div>';
+    }
+
+    return '<div class="zsp-erklaerung">' + karte(true) + karte(false) + '</div>';
+}
+
+function station12ZeileSpalte() {
+    const zahl = randomInt(1, 100);
+    const nachZeile = (Math.random() < 0.5);
+    const richtig = nachZeile ? htZeile(zahl) : htSpalte(zahl);
+
+    coachZuruecksetzen();
+
+    // Worauf es ankommt, steht unterstrichen in der Frage - und der Pfeil
+    // dahinter zeigt gleich, wie die Zeile bzw. die Spalte läuft.
+    setInstruction('<span class="frage-gross">In welcher ' +
+                   '<span class="frage-wort">' + (nachZeile ? 'Zeile' : 'Spalte') + '</span>' +
+                   '<span class="frage-pfeil">' + (nachZeile ? '➡' : '⬇') + '</span>' +
+                   ' der Hundertertafel steht diese Zahl?</span>');
+    setTaskArea('<div class="zahl-gross">' + zahl + '</div>' +
+                zeileSpalteBildHTML(nachZeile) +
+                lerncoachHTML());
+
+    // Ablenker aus der Nachbarschaft der richtigen Linie. Die Kandidaten
+    // reichen nach beiden Seiten weit genug, damit auch am Rand (Zeile 1,
+    // Spalte 10) noch vier Antworten zusammenkommen.
+    const optionen = [richtig];
+    shuffle([richtig - 1, richtig + 1, richtig - 2, richtig + 2,
+             richtig - 3, richtig + 3, richtig - 4, richtig + 4]).forEach(k => {
+        if (optionen.length < 4 && k >= 1 && k <= 10 && optionen.indexOf(k) === -1) {
+            optionen.push(k);
+        }
+    });
+
+    const hinweis = 'Die ' + zahl + ' steht in Zeile ' + htZeile(zahl) +
+                    ' und Spalte ' + htSpalte(zahl) + '.';
+
+    renderOptions(shuffle(optionen), richtig, null, hinweis,
+        () => station12LinieZeigen(zahl, nachZeile));
+}
+
+/* Nach der Antwort die Tafel mit der gesuchten Zeile oder Spalte -
+   dann sieht das Kind, warum die Zahl genau dort steht. */
+function station12LinieZeigen(zahl, nachZeile) {
+    const linie = nachZeile ? htZeile(zahl) : htSpalte(zahl);
+    const html = htTafelHTML(n => {
+        if (n === zahl) return '<span class="ht-zelle ht-gefuellt">' + n + '</span>';
+        const aufLinie = (nachZeile ? htZeile(n) : htSpalte(n)) === linie;
+        return '<span class="ht-zelle' + (aufLinie ? ' ht-linie' : '') + '">' + n + '</span>';
+    });
+    setTaskArea(htBereichHTML(html));
+}
+
+/* ---------- Zahlendreher ---------- */
+
+/* Zwei Felder sind markiert: eines gehört der Zahl, das andere ihrem
+   Zahlendreher (47 und 74). Beide liegen weit auseinander - in der
+   leeren Tafel muss das Kind Zeile und Spalte wirklich abzählen und
+   kann nicht nach den bekannten Ziffern schauen.
+   Die Tafel ist ganz leer. Wer eine Leitlinie zum Abzählen braucht,
+   schaltet sie sich dazu: die Einerzahlen 1-10 als erste Reihe oben,
+   die Zehnerzahlen 10-100 als Spalte rechts außen. */
+let s12DreherZahl = 0;
+let s12DreherDreh = 0;
+let s12DreherFelder = [];   // [{ marke, zahl }] - A und B in zufälliger Zuordnung
+let s12DreherGetippt = 0;
+let s12DreherEiner = false;    // die erste Reihe: 1 bis 10
+let s12DreherZehner = false;   // die rechte Spalte: 10 bis 100
+
+function station12Dreher() {
+    const z = randomInt(1, 9);
+    let e = randomInt(1, 9);
+    while (e === z) e = randomInt(1, 9);   // sonst wären beide Felder dasselbe
+
+    s12DreherZahl = z * 10 + e;
+    s12DreherDreh = e * 10 + z;
+    s12DreherGetippt = 0;
+    s12DreherEiner = false;    // beide Hilfen starten bei jeder Aufgabe wieder aus
+    s12DreherZehner = false;
+
+    // Die Buchstaben werden gemischt: sonst wäre A immer die kleinere Zahl
+    s12DreherFelder = shuffle([s12DreherZahl, s12DreherDreh])
+        .map((zahl, i) => ({ marke: (i === 0) ? 'A' : 'B', zahl: zahl }));
+
+    setInstruction('Zwei Felder sind markiert. In welchem steht diese Zahl?');
+    station12DreherZeichnen();
+}
+
+function station12DreherZeichnen() {
+    const html = htTafelHTML(zahl => {
+        const feld = s12DreherFelder.find(f => f.zahl === zahl);
+
+        if (feld) {
+            if (!s12DreherGetippt) {
+                return '<button class="ht-zelle ht-markiert" ' +
+                       'onclick="station12DreherTippe(' + zahl + ')">' + feld.marke + '</button>';
+            }
+            let klasse = (zahl === s12DreherZahl) ? 'ht-gefuellt'
+                       : (zahl === s12DreherGetippt) ? 'ht-daneben' : 'ht-loesung';
+            return '<span class="ht-zelle ' + klasse + '">' + zahl + '</span>';
+        }
+
+        // Zahlen stehen nur da, wo eine Hilfe eingeschaltet ist
+        const sichtbar = (s12DreherEiner && zahl <= 10) ||
+                         (s12DreherZehner && htSpalte(zahl) === 10);
+        return '<span class="ht-zelle">' + (sichtbar ? zahl : '') + '</span>';
+    });
+
+    setTaskArea(
+        htBereichHTML(htTafelMitZahlHTML(html, s12DreherZahl)) +
+        '<div class="hilfe-bereich" style="--hilfe-farbe: ' + htFarbe() + ';">' +
+        '<div class="hilfe-tasten">' +
+        '<button class="hilfe-btn' + (s12DreherEiner ? ' aktiv' : '') +
+        '" onclick="station12DreherEinerToggle()">1️⃣ Einerzahlen ' +
+        (s12DreherEiner ? 'ausblenden' : 'zeigen') + '</button>' +
+        '<button class="hilfe-btn' + (s12DreherZehner ? ' aktiv' : '') +
+        '" onclick="station12DreherZehnerToggle()">🔟 Zehnerzahlen ' +
+        (s12DreherZehner ? 'ausblenden' : 'zeigen') + '</button>' +
+        '</div></div>'
+    );
+}
+
+function station12DreherEinerToggle() {
+    s12DreherEiner = !s12DreherEiner;
+    station12DreherZeichnen();
+}
+
+function station12DreherZehnerToggle() {
+    s12DreherZehner = !s12DreherZehner;
+    station12DreherZeichnen();
+}
+
+function station12DreherTippe(zahl) {
+    if (answerLocked) return;
+    s12DreherGetippt = zahl;
+    station12DreherZeichnen();
+    // true: von zwei Feldern wäre das zweite zwangsläufig das richtige
+    submitAnswer(zahl === s12DreherZahl,
+        'Die ' + s12DreherZahl + ' steht in Zeile ' + htZeile(s12DreherZahl) +
+        ' und Spalte ' + htSpalte(s12DreherZahl) + '. Im anderen Feld steht die ' +
+        s12DreherDreh + ' – da sind die Ziffern vertauscht.', true);
+}
+
+/* ---------- Zahlenkönig ---------- */
+
+/* Nach dem Arbeitsblatt: In einer fast leeren Hundertertafel sitzen
+   Bilder auf einzelnen Feldern. Unten sammelt eine Legende zu jedem
+   Bild die Zahl - das Kind muss das Bild also erst finden und sich
+   von den wenigen vorgegebenen Zahlen aus zu ihm durchzählen. */
+const KOENIG_BILDER = ['🐞', '🦋', '🌸', '🐭', '🍒', '🌳', '🐦', '🥄', '🎲', '🐌', '🦔', '🍐'];
+const S12_KOENIG_BILDER = 5;
+const S12_KOENIG_ANKER = 5;   // verstreute Zahlen zusätzlich zur ersten Reihe
+
+let s12Bilder = [];       // [{ emoji, zahl }]
+let s12Vorgaben = [];     // Zahlen, die in der Tafel stehen
+let s12KoenigZehner = false;
+
+function station12Koenig() {
+    const zahlen = [];
+    while (zahlen.length < S12_KOENIG_BILDER) {
+        const zahl = randomInt(11, 100);
+        if (zahlen.indexOf(zahl) === -1) zahlen.push(zahl);
+    }
+    const bilder = shuffle(KOENIG_BILDER);
+    s12Bilder = zahlen.map((zahl, i) => ({ emoji: bilder[i], zahl: zahl }));
+
+    // Die erste Reihe steht immer da - an ihr zählt das Kind die Spalte ab.
+    s12Vorgaben = [];
+    for (let i = 1; i <= 10; i++) s12Vorgaben.push(i);
+
+    let schutz = 0;
+    while (s12Vorgaben.length < 10 + S12_KOENIG_ANKER && schutz++ < 300) {
+        const zahl = randomInt(11, 100);
+        if (s12Vorgaben.indexOf(zahl) === -1 && zahlen.indexOf(zahl) === -1) {
+            s12Vorgaben.push(zahl);
+        }
+    }
+
+    s12KoenigZehner = false;   // die Hilfe startet bei jeder Aufgabe wieder aus
+    htStart(shuffle(zahlen),
+            shuffle(zahlen.concat(htStoerer(zahlen.concat(s12Vorgaben), zahlen, 2))),
+            station12KoenigZeichnen);
+
+    setInstruction('Jedes Bild sitzt auf einem Feld der Hundertertafel. ' +
+                   'Welche Zahl gehört zu dem Bild mit dem <strong>?</strong>');
+    station12KoenigZeichnen();
+}
+
+function station12KoenigZeichnen() {
+    const html = htTafelHTML(zahl => {
+        const bild = s12Bilder.find(b => b.zahl === zahl);
+        if (bild) {
+            const fertig = (htGefuellt.indexOf(zahl) !== -1) || htAufgeloest;
+            return '<span class="ht-zelle ht-bild' + (fertig ? ' ht-bild-fertig' : '') + '">' +
+                   bild.emoji + '</span>';
+        }
+        const sichtbar = s12Vorgaben.indexOf(zahl) !== -1 ||
+                         (s12KoenigZehner && htSpalte(zahl) === 10);
+        return '<span class="ht-zelle">' + (sichtbar ? zahl : '') + '</span>';
+    });
+
+    setTaskArea(
+        htBereichHTML(html + station12KoenigLegendeHTML() + htKartenHTML()) +
+        '<div class="hilfe-bereich" style="--hilfe-farbe: ' + htFarbe() + ';">' +
+        '<button class="hilfe-btn' + (s12KoenigZehner ? ' aktiv' : '') +
+        '" onclick="station12KoenigZehnerToggle()">' +
+        (s12KoenigZehner ? '🔢 Zehnerzahlen ausblenden' : '🔢 Zehnerzahlen zeigen') +
+        '</button></div>'
+    );
+}
+
+function station12KoenigZehnerToggle() {
+    s12KoenigZehner = !s12KoenigZehner;
+    station12KoenigZeichnen();
+}
+
+/* Die Legende unter der Tafel: zu jedem Bild ein Kasten. Der Kasten mit
+   dem ? sagt, welches Bild gerade gesucht ist. */
+function station12KoenigLegendeHTML() {
+    let html = '<div class="koenig-legende">';
+    s12Bilder.forEach(bild => {
+        const dran = (bild.zahl === htFragen[htSchritt]) && !htAufgeloest &&
+                     htGefuellt.indexOf(bild.zahl) === -1;
+        let klasse, inhalt;
+        if (htGefuellt.indexOf(bild.zahl) !== -1) {
+            klasse = 'ht-gefuellt';
+            inhalt = bild.zahl;
+        } else if (htAufgeloest) {
+            klasse = 'ht-loesung';
+            inhalt = bild.zahl;
+        } else if (dran) {
+            klasse = 'ht-luecke ht-dran';
+            inhalt = '?';
+        } else {
+            klasse = 'ht-luecke';
+            inhalt = '';
+        }
+        html += '<div class="koenig-paar' + (dran ? ' koenig-dran' : '') + '">' +
+                '<span class="koenig-bild">' + bild.emoji + '</span>' +
+                '<span class="ht-zelle ' + klasse + '">' + inhalt + '</span></div>';
+    });
+    return html + '</div>';
+}
+
+/* ============================================
+   Station 13: Ausschnitte und Wege
+   ============================================ */
+
+/* Die Formen sitzen in einem Fenster von 3 x 3 Feldern.
+   zellen: [Reihe, Spalte] - alles andere ist weggeschnitten. */
+const HT_FORMEN = [
+    { name: 'O',     zellen: [[0,0],[0,1],[0,2],[1,0],[1,2],[2,0],[2,1],[2,2]] },
+    { name: 'L',     zellen: [[0,0],[1,0],[2,0],[2,1],[2,2]] },
+    { name: 'T',     zellen: [[0,0],[0,1],[0,2],[1,1],[2,1]] },
+    { name: 'U',     zellen: [[0,0],[0,2],[1,0],[1,2],[2,0],[2,1],[2,2]] },
+    { name: 'Z',     zellen: [[0,0],[0,1],[0,2],[1,1],[2,0],[2,1],[2,2]] },
+    { name: 'Kreuz', zellen: [[0,1],[1,0],[1,1],[1,2],[2,1]] }
+];
+
+/* Für die schwere Fassung: kleine Stücke, damit aus einer einzigen
+   Vorgabe nicht sieben Lücken werden. */
+const HT_FORMEN_KLEIN = [
+    { name: 'Quadrat', zellen: [[0,0],[0,1],[1,0],[1,1]] },
+    { name: 'Treppe',  zellen: [[0,0],[0,1],[1,1],[1,2]] },
+    { name: 'L',       zellen: [[0,0],[1,0],[2,0],[2,1],[2,2]] },
+    { name: 'T',       zellen: [[0,0],[0,1],[0,2],[1,1],[2,1]] },
+    { name: 'Kreuz',   zellen: [[0,1],[1,0],[1,1],[1,2],[2,1]] }
+];
+
+const HT_STUECK_LUECKEN = 3;
+
+let s13Form = null;
+let s13Anker = 0;   // Zahl im Feld links oben des Fensters
+
+function s13Wert(reihe, spalte) {
+    return s13Anker + reihe * 10 + spalte;
+}
+
+/* Ein Fenster, das ganz in die Tafel passt: höchstens ab Reihe 8, Spalte 8 */
+function s13ZufallsAnker() {
+    return randomInt(0, 7) * 10 + randomInt(0, 7) + 1;
+}
+
+function s13Werte() {
+    return s13Form.zellen.map(z => s13Wert(z[0], z[1]));
+}
+
+/* ---------- Ausschnitte (mehrere Zahlen vorgegeben) ---------- */
+
+function station13Ausschnitt() {
+    s13Form = pick(HT_FORMEN);
+    s13Anker = s13ZufallsAnker();
+
+    const werte = s13Werte();
+    const luecken = shuffle(werte).slice(0, HT_STUECK_LUECKEN);
+
+    htStart(luecken,
+            shuffle(luecken.concat(htStoerer(werte, luecken, 2))),
+            station13AusschnittZeichnen);
+
+    setInstruction('Ein Stück aus der Hundertertafel, Form <strong>' + s13Form.name +
+                   '</strong>. Welche Zahl gehört in das Feld mit dem <strong>?</strong>');
+    station13AusschnittZeichnen();
+}
+
+/* ---------- Nur eine Zahl steht da ---------- */
+
+function station13NurEine() {
+    s13Form = pick(HT_FORMEN_KLEIN);
+    s13Anker = s13ZufallsAnker();
+
+    const werte = s13Werte();
+    const vorgabe = pick(werte);
+    const luecken = shuffle(werte.filter(w => w !== vorgabe));
+
+    htStart(luecken,
+            shuffle(luecken.concat(htStoerer(werte, luecken, 2))),
+            station13AusschnittZeichnen);
+
+    setInstruction('Nur eine Zahl steht auf diesem Stück. ' +
+                   'Welche Zahl gehört in das Feld mit dem <strong>?</strong>');
+    station13AusschnittZeichnen();
+}
+
+/* ---------- Nachbarzahlen ---------- */
+
+/* Dieselbe Ansicht wie beim Ausschnitt: das Kreuz mit der Zahl in der
+   Mitte. Zehner und Einer liegen hier bewusst zwischen 2 und 8, damit
+   es alle vier Nachbarn wirklich gibt. */
+function station13Nachbarn() {
+    const mitte = randomInt(1, 8) * 10 + randomInt(2, 9);
+    const nachbarn = [mitte - 10, mitte - 1, mitte + 1, mitte + 10];
+
+    s13Form = HT_FORMEN[HT_FORMEN.length - 1];   // Kreuz
+    s13Anker = mitte - 11;                       // Feld links oben des Fensters
+
+    htStart(shuffle(nachbarn),
+            shuffle(nachbarn.concat(htStoerer([mitte].concat(nachbarn), nachbarn, 2))),
+            station13AusschnittZeichnen);
+
+    setInstruction('Trage die Nachbarn der <strong>' + mitte + '</strong> ein: ' +
+                   'darüber, links, rechts und darunter. ' +
+                   'Welche Zahl gehört in das Feld mit dem <strong>?</strong>');
+    station13AusschnittZeichnen();
+}
+
+function station13AusschnittZeichnen() {
+    let zellen = '';
+    for (let reihe = 0; reihe < 3; reihe++) {
+        for (let spalte = 0; spalte < 3; spalte++) {
+            const gehoertDazu = s13Form.zellen.some(z => z[0] === reihe && z[1] === spalte);
+            if (!gehoertDazu) {
+                zellen += '<span class="ht-zelle ht-leer"></span>';
+                continue;
+            }
+            const wert = s13Wert(reihe, spalte);
+            zellen += (htFragen.indexOf(wert) === -1)
+                ? '<span class="ht-zelle ht-vorgabe">' + wert + '</span>'
+                : htLueckeHTML(wert);
+        }
+    }
+    setTaskArea(htBereichHTML('<div class="ht-ausschnitt">' + zellen + '</div>' + htKartenHTML()));
+}
+
+/* ---------- Pfeilwege ---------- */
+
+/* Ein Schritt nach rechts ist +1, ein Schritt nach unten +10 - genau
+   das macht die Tafel sichtbar. */
+const WEG_RICHTUNGEN = [
+    { pfeil: '→', dr: 0,  dc: 1  },
+    { pfeil: '←', dr: 0,  dc: -1 },
+    { pfeil: '↓', dr: 1,  dc: 0  },
+    { pfeil: '↑', dr: -1, dc: 0  }
+];
+
+/* Würfelt einen Weg aus, der in der Tafel bleibt. Er darf nicht sofort
+   zurücklaufen und nicht wieder am Start enden - sonst wäre die Aufgabe
+   entweder doppelt oder gar keine. */
+function s13WegWuerfeln() {
+    for (let versuch = 0; versuch < 50; versuch++) {
+        let reihe = randomInt(1, 8);
+        let spalte = randomInt(2, 9);
+        const pfad = [reihe * 10 + spalte];
+        const pfeile = [];
+        let letzte = null;
+
+        for (let i = 0; i < randomInt(3, 4); i++) {
+            const moeglich = WEG_RICHTUNGEN.filter(r => {
+                const nr = reihe + r.dr;
+                const ns = spalte + r.dc;
+                if (nr < 0 || nr > 9 || ns < 1 || ns > 10) return false;
+                return !(letzte && r.dr === -letzte.dr && r.dc === -letzte.dc);
+            });
+            const richtung = pick(moeglich);
+            reihe += richtung.dr;
+            spalte += richtung.dc;
+            pfeile.push(richtung.pfeil);
+            pfad.push(reihe * 10 + spalte);
+            letzte = richtung;
+        }
+
+        if (pfad[pfad.length - 1] !== pfad[0]) return { pfad: pfad, pfeile: pfeile };
+    }
+    // Sollte nie vorkommen; lieber ein einfacher Weg als gar keine Aufgabe
+    return { pfad: [44, 45], pfeile: ['→'] };
+}
+
+function station13Wege() {
+    const weg = s13WegWuerfeln();
+    const start = weg.pfad[0];
+    const ziel = weg.pfad[weg.pfad.length - 1];
+
+    setInstruction('Gehe in der Hundertertafel los. Wo kommst du an?');
+    setTaskArea(
+        '<div class="weg-aufgabe">' +
+        '<span class="zahl-karte">' + start + '</span>' +
+        weg.pfeile.map(p => '<span class="weg-pfeil">' + p + '</span>').join('') +
+        '<span class="weg-gleich">=</span>' +
+        '<span class="zahl-karte weg-ziel">?</span>' +
+        '</div>' +
+        htHilfeHTML(htSchlichteTafelHTML(),
+                    '🔢 Hundertertafel zeigen', '🔢 Hundertertafel ausblenden')
+    );
+
+    const optionen = [ziel];
+    shuffle([ziel - 1, ziel + 1, ziel - 10, ziel + 10, ziel - 9, ziel + 11]).forEach(k => {
+        if (optionen.length < 4 && k >= 1 && k <= 100 && optionen.indexOf(k) === -1) {
+            optionen.push(k);
+        }
+    });
+
+    renderOptions(shuffle(optionen), ziel, null,
+        'Der Weg führt über ' + weg.pfad.join(' → ') + '.',
+        () => station13WegZeigen(weg.pfad));
+}
+
+/* Nach der Antwort der Weg in der Tafel - ein Pfeil auf dem Papier
+   sagt weniger als die Spur durch die Zahlen. */
+function station13WegZeigen(pfad) {
+    const html = htTafelHTML(zahl => {
+        const platz = pfad.indexOf(zahl);
+        if (platz === -1) return '<span class="ht-zelle">' + zahl + '</span>';
+        const klasse = (platz === 0) ? 'ht-start'
+                     : (zahl === pfad[pfad.length - 1]) ? 'ht-gefuellt' : 'ht-weg';
+        return '<span class="ht-zelle ' + klasse + '">' + zahl + '</span>';
+    });
+    setTaskArea(htBereichHTML(html));
+}
+
+/* ============================================
    10. Stationen-Registrierung
    Neue Station = hier einen Eintrag ergänzen.
+
+   title ist die Überschrift ohne Nummer - die Nummer ergibt sich aus
+   der Reihenfolge in dieser Liste (siehe stationTitel). Beim Umsortieren
+   muss deshalb nichts von Hand nachgezogen werden.
    ============================================ */
 const STATIONS = [
     {
         name: 'Zehnerzahlen finden',
-        title: 'Station 1: Zehnerzahlen finden',
+        title: 'Zehnerzahlen finden',
         emoji: '📊',
         color: 'modul1',
         newTask: station1NewTask
     },
     {
         name: 'Zehnerzahlen ordnen',
-        title: 'Station 2: Zehnerzahlen ordnen',
+        title: 'Zehnerzahlen ordnen',
         emoji: '⚖️',
         color: 'modul2',
         subStations: [
@@ -2113,21 +3373,21 @@ const STATIONS = [
     },
     {
         name: 'Rechnen 1 (Plus)',
-        title: 'Station 3: Mit Zehnerzahlen rechnen 1',
+        title: 'Mit Zehnerzahlen rechnen 1',
         emoji: '➕',
         color: 'modul3',
         newTask: station3NewTask
     },
     {
         name: 'Rechnen 2 (Minus)',
-        title: 'Station 4: Mit Zehnerzahlen rechnen 2',
+        title: 'Mit Zehnerzahlen rechnen 2',
         emoji: '➖',
         color: 'modul4',
         newTask: station4NewTask
     },
     {
         name: 'Zahlen hören',
-        title: 'Station 5: Zahlen hören',
+        title: 'Zahlen hören',
         emoji: '🔊',
         color: 'modul5',
         subStations: [
@@ -2141,35 +3401,92 @@ const STATIONS = [
     },
     {
         name: 'Zahlwörter bauen',
-        title: 'Station 6: Zahlwörter bauen',
+        title: 'Zahlwörter bauen',
         emoji: '🔤',
         color: 'modul6',
         newTask: station6NewTask
     },
     {
         name: 'Paare finden',
-        title: 'Station 7: Paare finden',
+        title: 'Paare finden',
         emoji: '🃏',
         color: 'modul7',
         newTask: station7NewTask
     },
     {
         name: 'Zahlen zerlegen',
-        title: 'Station 8: Zahlen zerlegen',
+        title: 'Zahlen zerlegen',
         emoji: '🧩',
         color: 'modul10',
         newTask: station8NewTask
     },
     {
+        name: 'Hunderterfeld',
+        title: 'Hunderterfeld',
+        emoji: '💯',
+        color: 'modul11',
+        subStations: [
+            { name: 'Welche Zahl?', emoji: '👀',
+              hinweis: 'Die Zahl im Punktefeld ablesen.',
+              newTask: station11Ablesen },
+            { name: 'Zahl legen', emoji: '🧱',
+              hinweis: 'Eine Zahl selbst aus Zehnern und Einern aufbauen.',
+              newTask: station11Legen }
+        ]
+    },
+    {
+        name: 'Hundertertafel',
+        title: 'Hundertertafel',
+        emoji: '🗺️',
+        color: 'modul12',
+        subStations: [
+            { name: 'Lücken füllen', emoji: '🔢',
+              hinweis: 'Fehlende Zahlen in der Tafel ergänzen.',
+              newTask: station12Luecken },
+            { name: 'Zahlenkönig', emoji: '👑',
+              hinweis: 'Auf welcher Zahl sitzt das Bild?',
+              newTask: station12Koenig },
+            { name: 'Wo wohnt die Zahl?', emoji: '🏠',
+              hinweis: 'Das Feld in der leeren Tafel finden.',
+              newTask: station12Wohnort },
+            { name: 'Zeile und Spalte', emoji: '📐',
+              hinweis: 'In welcher Zeile, in welcher Spalte steht die Zahl?',
+              newTask: station12ZeileSpalte },
+            { name: 'Zahlendreher', emoji: '🔄',
+              hinweis: 'Steht dort die 47 oder die 74?',
+              newTask: station12Dreher }
+        ]
+    },
+    {
+        name: 'Ausschnitte und Wege',
+        title: 'Ausschnitte und Wege',
+        emoji: '🧩',
+        color: 'modul13',
+        subStations: [
+            { name: 'Ausschnitte', emoji: '🧩',
+              hinweis: 'Ein ausgeschnittenes Stück der Tafel vervollständigen.',
+              newTask: station13Ausschnitt },
+            { name: 'Nur eine Zahl', emoji: '🔍',
+              hinweis: 'Schwerer: auf dem Stück steht nur noch eine Zahl.',
+              newTask: station13NurEine },
+            { name: 'Nachbarzahlen', emoji: '↔️',
+              hinweis: 'Die Nachbarn über, unter, links und rechts.',
+              newTask: station13Nachbarn },
+            { name: 'Pfeilwege', emoji: '➡️',
+              hinweis: 'Den Pfeilen durch die Tafel folgen.',
+              newTask: station13Wege }
+        ]
+    },
+    {
         name: 'Zahlen vergleichen',
-        title: 'Station 9: Zahlen vergleichen',
+        title: 'Zahlen vergleichen',
         emoji: '⚖️',
         color: 'modul9',
         newTask: station9NewTask
     },
     {
         name: 'Wäscheleine',
-        title: 'Station 10: Wäscheleine',
+        title: 'Wäscheleine',
         emoji: '🧺',
         color: 'modul8',
         subStations: [
@@ -2185,8 +3502,12 @@ const STATIONS = [
 
 /* ============================================
    11. Bereiche
-   Die Stationen sind in zwei Themenbereiche gegliedert.
+   Die Stationen sind in Themenbereiche gegliedert.
    Neuer Bereich = hier einen Eintrag ergänzen.
+
+   gesperrt: true heißt, der Bereich steht schon im Menü, lässt sich
+   aber noch nicht öffnen - das Thema war im Unterricht noch nicht
+   dran. Freischalten = diese Zeile entfernen.
    ============================================ */
 const BEREICHE = [
     {
@@ -2200,8 +3521,24 @@ const BEREICHE = [
         name: 'Zehner und Einer',
         emoji: '🔢',
         color: 'modul5',
-        hinweis: 'Alle Zahlen bis 100 – hören, bauen, zerlegen, vergleichen und ordnen.',
-        stationen: [4, 5, 6, 7, 8, 9]
+        hinweis: 'Alle Zahlen bis 100 – hören, bauen, zerlegen und Paare finden.',
+        stationen: [4, 5, 6, 7]
+    },
+    {
+        name: 'Hunderterfeld',
+        emoji: '💯',
+        color: 'modul11',
+        hinweis: 'Zahlen im Punktefeld ablesen und sich in der Hundertertafel zurechtfinden.',
+        stationen: [8, 9, 10],
+        gesperrt: true
+    },
+    {
+        name: 'Zahlenstrahl',
+        emoji: '📏',
+        color: 'modul9',
+        hinweis: 'Zahlen vergleichen und der Größe nach an die Leine hängen.',
+        stationen: [11, 12],
+        gesperrt: true
     }
 ];
 
