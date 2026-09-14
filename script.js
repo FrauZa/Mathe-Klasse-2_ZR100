@@ -3529,8 +3529,7 @@ const BEREICHE = [
         emoji: '💯',
         color: 'modul11',
         hinweis: 'Zahlen im Punktefeld ablesen und sich in der Hundertertafel zurechtfinden.',
-        stationen: [8, 9, 10],
-        gesperrt: true
+        stationen: [8, 9, 10]
     },
     {
         name: 'Zahlenstrahl',
