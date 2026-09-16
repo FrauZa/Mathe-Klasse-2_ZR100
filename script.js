@@ -11,6 +11,9 @@ function showScreen(screenId) {
     stopKonfetti();
     stopSprache();
     if (autoAdvanceTimeout) { clearTimeout(autoAdvanceTimeout); autoAdvanceTimeout = null; }
+    stopDurchlaufPause();
+    // Wer die Übung verlässt (Zurück, Tabs), beendet damit auch den Durchlauf
+    if (screenId !== 'stationScreen') durchlauf = null;
 
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     const target = document.getElementById(screenId);
@@ -183,6 +186,7 @@ let stationModus = 'zeit';      // 'zeit' oder 'tempo'
 let pendingStationIndex = 0;    // Auswahl auf dem Modus-Bildschirm
 let pendingSubIndex = 0;
 let stationScore = 0;
+let stationAufgabe = 0;   // wievielte Aufgabe der laufenden Runde
 let timeLeft = STATION_ZEIT;
 let stationTimerInterval = null;
 let autoAdvanceTimeout = null;
@@ -370,6 +374,7 @@ function showBereich(bereichIndex) {
     const titel = document.getElementById('bereichTitle');
     titel.innerText = bereich.name;
     titel.className = 'exercise-title ' + bereich.color + '-color';
+    document.getElementById('allesBtn').className = 'check-btn alles-btn ' + bereich.color + '-color';
 
     const grid = document.getElementById('stationButtonGrid');
     grid.innerHTML = '';
@@ -442,6 +447,7 @@ function startStation(index, subIndex, modus) {
     currentSubIndex = subIndex || 0;
     stationModus = modus || 'zeit';
     stationScore = 0;
+    stationAufgabe = 0;
     timeLeft = STATION_ZEIT;
     answerLocked = false;
 
@@ -487,6 +493,7 @@ function newStationTask() {
     markierungenAufraeumen();
     answerLocked = false;
     versuche = 0;
+    stationAufgabe++;   // Aufgaben, die eine Runde füllen, zählen mit
 
     const station = STATIONS[currentStationIndex];
     const sub = station.subStations ? station.subStations[currentSubIndex] : null;
@@ -616,13 +623,96 @@ function endStationRound() {
         setTimeout(() => { bigStar.style.transform = 'scale(1)'; }, 100);
     }
 
+    if (durchlauf) {
+        durchlaufRundeEnde();
+        return;
+    }
+
     document.getElementById('stationProceedBtn').innerText =
         alleSterneVerdient() ? 'Zur Auswertung' : 'Zur nächsten Station';
 }
 
+/* ============================================
+   "Alles ausprobieren": alle Aufgaben des gewählten Bereichs der
+   Reihe nach, jede Unterstation einzeln, jeweils eine Runde auf Zeit.
+   ============================================ */
+const DURCHLAUF_PAUSE = 6;   // Sekunden zwischen zwei Aufgaben
+
+let durchlauf = null;        // { liste: [{station, sub}], pos, bereich }
+let durchlaufPauseInterval = null;
+
+function startDurchlauf() {
+    const bereich = aktiverBereich;
+    if (bereichGesperrt(bereich)) return;
+
+    const liste = [];
+    BEREICHE[bereich].stationen.forEach(index => {
+        const subs = STATIONS[index].subStations;
+        const anzahl = subs ? subs.length : 1;
+        for (let sub = 0; sub < anzahl; sub++) liste.push({ station: index, sub: sub });
+    });
+    if (liste.length === 0) return;
+
+    durchlaufStarten(liste, 0);
+}
+
+function durchlaufStarten(liste, pos) {
+    const eintrag = liste[pos];
+    startStation(eintrag.station, eintrag.sub, 'zeit');   // setzt durchlauf zurück
+    durchlauf = { liste: liste, pos: pos };
+}
+
+function durchlaufName(eintrag) {
+    const station = STATIONS[eintrag.station];
+    const sub = station.subStations ? station.subStations[eintrag.sub] : null;
+    return station.name + (sub ? ' – ' + sub.name : '');
+}
+
+function stopDurchlaufPause() {
+    if (durchlaufPauseInterval) {
+        clearInterval(durchlaufPauseInterval);
+        durchlaufPauseInterval = null;
+    }
+}
+
+/* Runde vorbei: kurz feiern, dann geht es von selbst weiter */
+function durchlaufRundeEnde() {
+    const btn = document.getElementById('stationProceedBtn');
+    const naechste = durchlauf.liste[durchlauf.pos + 1];
+    const zaehler = ' (' + (durchlauf.pos + 2) + ' von ' + durchlauf.liste.length + ')';
+
+    let rest = DURCHLAUF_PAUSE;
+    const beschriften = () => {
+        btn.innerText = (naechste ? 'Weiter: ' + durchlaufName(naechste) + zaehler
+                                  : 'Fertig – zurück zu ' + BEREICHE[aktiverBereich].name) +
+                        ' … ' + rest;
+    };
+    beschriften();
+
+    stopDurchlaufPause();
+    durchlaufPauseInterval = setInterval(() => {
+        rest--;
+        if (rest <= 0) proceedToNextStation();
+        else beschriften();
+    }, 1000);
+}
+
 function proceedToNextStation() {
+    stopDurchlaufPause();
     const bigStar = document.getElementById('stationNewStarIcon');
     if (bigStar) bigStar.style.transform = 'scale(0)';
+
+    if (durchlauf) {
+        const pos = durchlauf.pos + 1;
+        if (pos < durchlauf.liste.length) {
+            durchlaufStarten(durchlauf.liste, pos);
+        } else {
+            // Bereich geschafft: zurück zur Auswahl (beendet auch den Durchlauf)
+            showBereich(aktiverBereich);
+            startKonfetti(150);
+        }
+        return;
+    }
 
     if (alleSterneVerdient()) {
         showScreen('resultScreen');
@@ -2448,69 +2538,62 @@ function htHilfeToggle() {
 
 /* Der Coach sagt nichts vor - er legt das leere Raster der
    Hundertertafel daneben, in dem das Kind Zeilen und Spalten abzählt.
-   Zwei Schalter beschriften den Rand: die Einer über den Spalten,
-   die Zehner neben den Zeilen. Die volle Tafel gibt es erst bei der
-   Auflösung - vorher stünde die Antwort schon da. */
-let coachOffen = false;
-let coachEiner = false;    // Einerziffern über den Spalten
-let coachZehner = false;   // Zehner neben den Zeilen
-
-const COACH_ZU  = '🧑‍🏫 Der Lerncoach hilft';
-const COACH_AUF = '🧑‍🏫 Lerncoach zumachen';
+   Zwei Schalter legen die Zählhilfe in die Tafel: die erste Reihe
+   1 bis 10 und die letzte Spalte 10 bis 100. Die volle Tafel gibt es
+   erst bei der Auflösung - vorher stünde die Antwort schon da. */
+let coachEiner = false;    // erste Reihe 1 bis 10
+let coachZehner = false;   // letzte Spalte 10 bis 100
+let coachZeichnen = null;  // die Aufgabe mit der Tafel zeichnet sich selbst neu
 
 /* Zu Beginn jeder Aufgabe ist der Coach wieder zu - erst selbst
    überlegen, das Raster nur bei Bedarf dazuholen. */
 function coachZuruecksetzen() {
-    coachOffen = false;
     coachEiner = false;
     coachZehner = false;
+    coachZeichnen = null;
 }
 
 /* Die Tafel im Coach bleibt leer: sie ist ein Raster zum Abzählen und
    kein Nachschlagewerk - mit allen Zahlen darin stünde die Antwort
-   schon da. Dazuschalten lässt sich die Beschriftung des Randes:
-   die Einerziffer über jeder Spalte, der Zehner neben jeder Zeile. */
-function coachTafelHTML() {
-    let html = '<div class="ht-beschriftet">';
+   schon da. Dazuschalten lässt sich die Zählhilfe, und zwar in der
+   Tafel selbst: die erste Reihe 1 bis 10, an der sich die Spalte
+   abzählen lässt, und die letzte Spalte 10 bis 100 für die Zeile.
+   Eine zweite Beschriftung außerhalb der Tafel bräuchte es dann nicht -
+   sie sagte dasselbe noch einmal, nur einen Schritt weiter weg. */
+function coachTafelHTML(zelleFn) {
+    const zeichne = zelleFn || ((zahl, hilfe) =>
+        '<span class="ht-zelle' + (hilfe ? ' ht-hilfszahl' : '') + '">' + hilfe + '</span>');
 
-    if (coachEiner) {
-        html += '<div class="ht-kopf">';
-        for (let spalte = 1; spalte <= 10; spalte++) {
-            const einer = spalte % 10;
-            html += '<span class="ht-randmarke' + (einer === 0 ? ' ht-randmarke-null' : '') +
-                    '">' + einer + '</span>';
-        }
-        html += '</div>';
-    }
-
-    if (coachZehner) {
-        html += '<div class="ht-seite">';
-        for (let zehner = 0; zehner <= 9; zehner++) {
-            html += '<span class="ht-randmarke">' + zehner + '</span>';
-        }
-        html += '</div>';
-    }
-
-    return html + htTafelHTML(() => '<span class="ht-zelle"></span>') + '</div>';
+    return htTafelHTML(zahl => zeichne(zahl, coachHilfszahl(zahl)));
 }
 
-function lerncoachHTML() {
-    return '<div class="coach" style="--coach-farbe: ' + htFarbe() + ';">' +
-           '<button class="coach-btn' + (coachOffen ? ' aktiv' : '') + '" ' +
-           'id="coachBtn" onclick="coachToggle()">' +
-           (coachOffen ? COACH_AUF : COACH_ZU) + '</button>' +
-           '<div class="coach-panel' + (coachOffen ? ' sichtbar' : '') + '" id="coachPanel">' +
-           coachInhaltHTML() + '</div></div>';
+/* Steht diese Zahl gerade als Zählhilfe in der Tafel? Ergibt die Zahl
+   als Text, sonst nichts - so kann jede Aufgabe selbst entscheiden, wie
+   sie die Hilfszahl in ihrem Feld unterbringt. */
+function coachHilfszahl(zahl) {
+    const hilft = (coachEiner && htZeile(zahl) === 1) ||
+                  (coachZehner && htSpalte(zahl) === 10);
+    return hilft ? String(zahl) : '';
 }
 
-function coachInhaltHTML() {
+/* Die Tafel steht dort, wo die Aufgabe in ihr gelöst wird: sie ist
+   keine Hilfe zum Dazuholen, sondern das Blatt, auf dem gearbeitet
+   wird. zelleFn bestimmt, was in den Feldern steht - so lässt sich
+   darin auch markieren und färben. */
+function coachDauerHTML(zelleFn) {
+    return '<div class="coach coach-dauer" style="--coach-farbe: ' + htFarbe() + ';">' +
+           '<div class="coach-panel">' + coachInhaltHTML(zelleFn) + '</div></div>';
+}
+
+function coachInhaltHTML(zelleFn) {
     let hinweis = '';
     if (coachEiner) {
-        hinweis += 'Oben steht über jeder Spalte ihre <strong>Einerziffer</strong>. ' +
-                   'Zahlen mit einer <strong>0</strong> am Ende stehen ganz rechts außen. ';
+        hinweis += 'Die <strong>erste Reihe</strong> steht jetzt in der Tafel: 1 bis 10. ' +
+                   'An ihr zählst du die Spalte ab. ';
     }
     if (coachZehner) {
-        hinweis += 'Links steht neben jeder Zeile ihr <strong>Zehner</strong>.';
+        hinweis += 'Die <strong>letzte Spalte</strong> steht jetzt in der Tafel: ' +
+                   '10, 20, 30 … 100. An ihr zählst du die Zeile ab.';
     }
 
     return '<p class="coach-text">Zähle im Raster nach: die <strong>Zeilen</strong> ' +
@@ -2524,12 +2607,7 @@ function coachInhaltHTML() {
            (coachZehner ? 'ausblenden' : 'zeigen') + '</button>' +
            '</div>' +
            (hinweis ? '<p class="coach-hinweis">' + hinweis + '</p>' : '') +
-           coachTafelHTML();
-}
-
-function coachToggle() {
-    coachOffen = !coachOffen;
-    coachAktualisieren();
+           coachTafelHTML(zelleFn);
 }
 
 function coachEinerToggle() {
@@ -2542,17 +2620,10 @@ function coachZehnerToggle() {
     coachAktualisieren();
 }
 
-/* Neu gezeichnet wird nur der Coach: die Aufgabe darüber bleibt so
-   stehen, wie sie ist. */
+/* Ein Schalter ändert nur die Tafel: die Aufgabe zeichnet sich selbst
+   neu, damit Markierungen und gefärbte Felder stehen bleiben. */
 function coachAktualisieren() {
-    const panel = document.getElementById('coachPanel');
-    const btn = document.getElementById('coachBtn');
-    if (!panel || !btn) return;
-
-    panel.classList.toggle('sichtbar', coachOffen);
-    btn.classList.toggle('aktiv', coachOffen);
-    btn.textContent = coachOffen ? COACH_AUF : COACH_ZU;
-    panel.innerHTML = coachInhaltHTML();
+    if (coachZeichnen) coachZeichnen();
 }
 
 /* ---------- Baustein: Lücken füllen mit Kartenvorrat ---------- */
@@ -2753,23 +2824,28 @@ let s12Ziel = 0;
 let s12Getippt = 0;
 let s12Falsch = [];        // im ersten Anlauf danebengetippte Felder
 let s12ZehnerAn = false;   // Zählhilfe: die Zehnerzahlen am rechten Rand
+let s12EinerAn = false;    // Zählhilfe: die erste Reihe 1 bis 10
 
-/* Gesucht wird nie eine Zahl der Zehnerspalte: sonst bliebe dort mit
-   eingeschalteter Hilfe genau ein Feld frei und verriete die Lösung. */
+/* Gesucht wird nie eine Zahl der Zehnerspalte und keine der ersten
+   Reihe: dort bliebe mit eingeschalteter Hilfe genau ein Feld frei und
+   verriete die Lösung. */
 function station12Wohnort() {
     do {
         s12Ziel = randomInt(1, 100);
-    } while (HT_ECKEN.indexOf(s12Ziel) !== -1 || htSpalte(s12Ziel) === 10);
+    } while (HT_ECKEN.indexOf(s12Ziel) !== -1 || htSpalte(s12Ziel) === 10 ||
+             htZeile(s12Ziel) === 1);
     s12Getippt = 0;
     s12Falsch = [];
-    s12ZehnerAn = false;   // die Hilfe startet bei jeder Aufgabe wieder aus
+    s12ZehnerAn = false;   // beide Hilfen starten bei jeder Aufgabe wieder aus
+    s12EinerAn = false;
 
     setInstruction('Wo wohnt diese Zahl in der Hundertertafel? Tippe das Feld an.');
     station12WohnortZeichnen();
 }
 
-/* Sichtbar sind die vier Eckzahlen - und auf Wunsch die Zehnerzahlen
-   am rechten Rand, mit denen sich die Zeile abzählen lässt. */
+/* Sichtbar sind die vier Eckzahlen - und auf Wunsch die Zehnerzahlen am
+   rechten Rand, an denen sich die Zeile abzählen lässt, sowie die erste
+   Reihe 1 bis 10 für die Spalte. */
 function station12WohnortZeichnen() {
     const html = htTafelHTML(zahl => {
         // Danebengetippt: das Feld bleibt rot stehen und zeigt seine Zahl.
@@ -2790,8 +2866,9 @@ function station12WohnortZeichnen() {
         }
 
         const vorgegeben = HT_ECKEN.indexOf(zahl) !== -1 ||
-                           (s12ZehnerAn && htSpalte(zahl) === 10);
-        if (vorgegeben) return '<span class="ht-zelle ht-ecke">' + zahl + '</span>';
+                           (s12ZehnerAn && htSpalte(zahl) === 10) ||
+                           (s12EinerAn && htZeile(zahl) === 1);
+        if (vorgegeben) return '<span class="ht-zelle ht-hilfszahl">' + zahl + '</span>';
 
         if (!s12Getippt) {
             return '<button class="ht-zelle ht-feld" ' +
@@ -2802,14 +2879,21 @@ function station12WohnortZeichnen() {
 
     setTaskArea(htBereichHTML(htTafelMitZahlHTML(html, s12Ziel)) +
         '<div class="hilfe-bereich" style="--hilfe-farbe: ' + htFarbe() + ';">' +
+        '<button class="hilfe-btn' + (s12EinerAn ? ' aktiv' : '') +
+        '" onclick="station12WohnortEinerToggle()">1️⃣ Erste Reihe ' +
+        (s12EinerAn ? 'ausblenden' : 'zeigen') + '</button>' +
         '<button class="hilfe-btn' + (s12ZehnerAn ? ' aktiv' : '') +
-        '" onclick="station12ZehnerToggle()">' +
-        (s12ZehnerAn ? '🔢 Zehnerzahlen ausblenden' : '🔢 Zehnerzahlen zeigen') +
-        '</button></div>');
+        '" onclick="station12ZehnerToggle()">🔟 Zehnerzahlen ' +
+        (s12ZehnerAn ? 'ausblenden' : 'zeigen') + '</button></div>');
 }
 
 function station12ZehnerToggle() {
     s12ZehnerAn = !s12ZehnerAn;
+    station12WohnortZeichnen();
+}
+
+function station12WohnortEinerToggle() {
+    s12EinerAn = !s12EinerAn;
     station12WohnortZeichnen();
 }
 
@@ -2857,6 +2941,233 @@ function station12LueckenZeichnen() {
     setTaskArea(htBereichHTML(html + htKartenHTML()));
 }
 
+/* ---------- Zahlen färben ---------- */
+
+/* Beide Färb-Aufgaben arbeiten gleich: vorgegebene Zahlen, eine Tafel
+   ohne Ziffern, und aus den gefärbten Feldern entsteht ein Muster.
+   Ein Fehlgriff beendet die Aufgabe nicht - bei zwanzig Tipps pro Bild
+   soll ein Verrutschen nicht alles kosten. Das Feld leuchtet kurz rot
+   und wird wieder frei; gezählt wird jedes richtig gefärbte Feld. */
+/* Eine Aufgabe kann aus mehreren Teilen bestehen - beim Färben 1 sind es
+   sechs Linien nacheinander. Jeder Teil ist für sich eine Aufgabe und
+   beginnt auf einer frischen, leeren Tafel: so steht am Ende jede Zeile
+   und jede Spalte einmal ungestört für sich da. */
+let malProgramm = [];     // [{ frage, zahlen }] - die Teile der Aufgabe
+let malSchritt = 0;       // welcher Teil gerade dran ist
+let malGefaerbt = [];     // gefärbte Felder des laufenden Teils
+let malMitCoach = false;  // Einer und Zehner zuschaltbar?
+let malAbschluss = null;  // was geschieht, wenn das Bild fertig ist
+
+function malStart(programm, mitCoach, abschluss) {
+    // Der Größe nach: so steht der Zettel in derselben Ordnung da,
+    // in der das Kind die Zahlen in der Tafel findet
+    malProgramm = programm.map(teil => ({
+        frage: teil.frage,
+        zahlen: teil.zahlen.slice().sort((a, b) => a - b)
+    }));
+    malSchritt = 0;
+    malGefaerbt = [];
+    malMitCoach = mitCoach;
+    malAbschluss = abschluss || null;
+
+    coachZuruecksetzen();
+    if (mitCoach) coachZeichnen = malZeichnen;   // die Schalter zeichnen die Aufgabe neu
+
+    malSchrittZeigen();
+}
+
+function malZiel() {
+    return malProgramm[malSchritt].zahlen;
+}
+
+function malSchrittZeigen() {
+    setInstruction(malProgramm[malSchritt].frage);
+    malZeichnen();
+}
+
+/* Fertig ist ein Teil, wenn alle seine Zahlen gefärbt sind - auch die,
+   die schon von einer früheren Linie her stehen (dort, wo Zeile und
+   Spalte sich kreuzen). */
+function malTeilFertig() {
+    return malZiel().every(zahl => malGefaerbt.indexOf(zahl) !== -1);
+}
+
+/* Die Liste der vorgegebenen Zahlen: keine Karten zum Antippen, sondern
+   ein Zettel zum Abhaken - gefärbt wird in der Tafel. */
+function malListeHTML() {
+    let html = '';
+
+    // Bei mehreren Teilen soll zu sehen sein, wie weit die Aufgabe ist
+    if (malProgramm.length > 1) {
+        html += '<p class="mal-schritt">Linie ' + (malSchritt + 1) +
+                ' von ' + malProgramm.length + '</p>';
+    }
+
+    html += '<div class="mal-liste">';
+    malZiel().forEach(zahl => {
+        const fertig = (malGefaerbt.indexOf(zahl) !== -1);
+        html += '<span class="mal-zahl' + (fertig ? ' mal-zahl-fertig' : '') + '">' +
+                zahl + '</span>';
+    });
+    return html + '</div>';
+}
+
+/* hilfe ist die Zahl der Zählhilfe, falls sie hier gerade steht. Sie
+   bleibt auch auf dem gefärbten Feld sichtbar - sonst verschwände beim
+   Färben der ersten Reihe genau das Lineal, an dem abgezählt wird. */
+function malZelleHTML(zahl, hilfe) {
+    if (malGefaerbt.indexOf(zahl) !== -1) {
+        return '<span class="ht-zelle ht-gefaerbt">' + hilfe + '</span>';
+    }
+    return '<button class="ht-zelle ht-feld' + (hilfe ? ' ht-hilfszahl' : '') +
+           '" id="mal' + zahl + '" onclick="malTippe(' + zahl + ')">' + hilfe + '</button>';
+}
+
+function malZeichnen() {
+    const tafel = malMitCoach
+        ? coachDauerHTML(malZelleHTML)
+        : htBereichHTML(htTafelHTML(zahl => malZelleHTML(zahl, '')));
+    setTaskArea(malListeHTML() + tafel);
+}
+
+function malTippe(zahl) {
+    if (answerLocked) return;
+    if (malGefaerbt.indexOf(zahl) !== -1) return;
+
+    // Danebengetippt: kurz rot, dann wieder frei. Die Tafel wird dafür
+    // nicht neu gezeichnet, sonst wäre das Aufleuchten sofort wieder weg.
+    if (malZiel().indexOf(zahl) === -1) {
+        const feld = document.getElementById('mal' + zahl);
+        if (feld) {
+            feld.classList.add('ht-daneben');
+            markierungLoesen(feld, 'ht-daneben');
+        }
+        return;
+    }
+
+    malGefaerbt.push(zahl);
+
+    // Das letzte Feld des letzten Teils beendet die Aufgabe - den Punkt
+    // dafür vergibt submitAnswer
+    if (malTeilFertig() && malSchritt + 1 >= malProgramm.length) {
+        malZeichnen();
+        submitAnswer(true);
+        if (malAbschluss) malAbschluss();
+        return;
+    }
+
+    // Jedes gefärbte Feld zählt sofort - ein Bild hat viele davon
+    stationScore++;
+    document.getElementById('stationScore').innerText = stationScore;
+
+    if (malTeilFertig()) {
+        // Weiter zur nächsten Linie - und zwar auf einer leeren Tafel:
+        // die neue Aufgabe soll nicht im Bild der alten stehen
+        malSchritt++;
+        malGefaerbt = [];
+        neuerSchritt();
+        malSchrittZeigen();
+        return;
+    }
+
+    malZeichnen();
+}
+
+/* Für Aufgaben, die eine ganze Runde füllen: statt einer neuen Aufgabe
+   kommt der Abschluss der Station. Das fertige Bild bleibt noch einen
+   Moment stehen - es ist der Lohn der Arbeit und will angesehen werden. */
+function malRundeBeenden() {
+    if (autoAdvanceTimeout) clearTimeout(autoAdvanceTimeout);
+    autoAdvanceTimeout = setTimeout(endStationRound, 2600);
+}
+
+/* Zahlen färben 1: drei Zeilen und drei Spalten, eine nach der anderen,
+   jede auf einer leeren Tafel. Welche Linie gemeint ist, steht in der
+   Aufgabe - die zehn Zahlen muss das Kind trotzdem einzeln in der leeren
+   Tafel finden. Nach der sechsten Linie ist die Runde vorbei.
+   Die Randhilfen des Coachs stehen zur Verfügung. */
+const MAL_LINIEN = 3;   // je drei Zeilen und drei Spalten in einer Aufgabe
+
+function malLinieTeil(nummer, nachZeile) {
+    const zahlen = [];
+    for (let i = 1; i <= 10; i++) {
+        zahlen.push(nachZeile ? (nummer - 1) * 10 + i : (i - 1) * 10 + nummer);
+    }
+
+    return {
+        frage: '<span class="frage-gross">Färbe die ' +
+               '<span class="frage-wort">' + nummer + '. ' +
+               (nachZeile ? 'Zeile' : 'Spalte') + '</span>' +
+               '<span class="frage-pfeil">' + (nachZeile ? '➡' : '⬇') + '</span>' +
+               '</span>',
+        zahlen: zahlen
+    };
+}
+
+function station12Faerben1() {
+    const nummern = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const teile = [];
+
+    shuffle(nummern.slice()).slice(0, MAL_LINIEN)
+        .forEach(nummer => teile.push(malLinieTeil(nummer, true)));
+    shuffle(nummern.slice()).slice(0, MAL_LINIEN)
+        .forEach(nummer => teile.push(malLinieTeil(nummer, false)));
+
+    // Gemischt: sonst kämen immer erst die Zeilen und dann die Spalten.
+    // Mit der sechsten Linie ist nicht nur diese Linie fertig, sondern
+    // die ganze Runde.
+    malStart(shuffle(teile), true, malRundeBeenden);
+}
+
+/* Zahlen färben 2: aus den Feldern wird ein Bild. Die Muster liegen in
+   den Zeilen 2 bis 9, damit rundherum ein Rand bleibt und die Form gut
+   zu erkennen ist. Die Randhilfen des Coachs lassen sich zuschalten -
+   sie starten aus, damit erst einmal selbst abgezählt wird. */
+const MAL_MUSTER = [
+    { name: 'ein H', felder: [13, 23, 33, 43, 53, 63, 73, 83,
+                              44, 45, 46, 47,
+                              18, 28, 38, 48, 58, 68, 78, 88] },
+    { name: 'ein T', felder: [12, 13, 14, 15, 16, 17, 18, 19,
+                              25, 26, 35, 36, 45, 46, 55, 56,
+                              65, 66, 75, 76, 85, 86] },
+    { name: 'ein L', felder: [13, 14, 23, 24, 33, 34, 43, 44,
+                              53, 54, 63, 64, 73, 74,
+                              83, 84, 85, 86, 87, 88] },
+    { name: 'ein O', felder: [14, 15, 16, 17,
+                              23, 28, 33, 38, 43, 48, 53, 58, 63, 68, 73, 78,
+                              84, 85, 86, 87] },
+    { name: 'ein Herz ❤️', felder: [23, 24, 27, 28,
+                                    33, 34, 35, 36, 37, 38,
+                                    43, 44, 45, 46, 47, 48,
+                                    54, 55, 56, 57,
+                                    65, 66] },
+    { name: 'ein Kreuz ✚', felder: [15, 16, 25, 26, 35, 36,
+                                    43, 44, 45, 46, 47, 48,
+                                    53, 54, 55, 56, 57, 58,
+                                    65, 66, 75, 76, 85, 86] }
+];
+
+const FAERBEN2_BILDER = 3;   // drei Bilder sind eine Runde
+
+function station12Faerben2() {
+    const muster = pick(MAL_MUSTER);
+
+    // Was entsteht, bleibt geheim: die Neugier trägt durch das Abzählen,
+    // und raten lässt sich das Bild aus der Hälfte der Felder auch nicht.
+    // Verraten wird es erst, wenn es fertig dasteht.
+    malStart([{
+        frage: '<span class="frage-gross">Färbe diese Zahlen. ' +
+               'Was wohl daraus wird?</span>',
+        zahlen: muster.felder
+    }], true, () => {
+        setInstruction('<span class="frage-gross">Fertig – es ist ' +
+                       '<span class="frage-wort">' + muster.name + '</span>!</span>');
+
+        // Nach dem dritten Bild ist die Station zu Ende
+        if (stationAufgabe >= FAERBEN2_BILDER) malRundeBeenden();
+    });
+}
+
 /* ---------- Zeile und Spalte ---------- */
 
 /* Ein kleines Schaubild, das immer dasteht: links eine Zeile quer,
@@ -2892,22 +3203,104 @@ function zeileSpalteBildHTML(nachZeile) {
     return '<div class="zsp-erklaerung">' + karte(true) + karte(false) + '</div>';
 }
 
+/* Die Aufgabe hat zwei Schritte: erst die Zahl in der leeren Tafel
+   markieren, dann ihre Zeile oder Spalte benennen. Gefragt wird also
+   nicht mehr im Kopf, sondern am eigenen Kreuz - das Kind zählt in der
+   Tafel ab, die dafür dauerhaft dasteht und nicht erst aufgeklappt
+   werden muss. */
+let s12ZsZahl = 0;
+let s12ZsNachZeile = true;
+let s12ZsMarkiert = 0;       // 0, solange die Zahl noch nicht sitzt
+let s12ZsFalsch = [];        // danebengetippte Felder
+let s12ZsAufgeloest = false; // nach dem zweiten Fehlversuch im ersten Schritt
+
 function station12ZeileSpalte() {
-    const zahl = randomInt(1, 100);
-    const nachZeile = (Math.random() < 0.5);
-    const richtig = nachZeile ? htZeile(zahl) : htSpalte(zahl);
+    // Nicht die erste Reihe und nicht die letzte Spalte: dort stünde die
+    // gesuchte Zahl mit eingeschalteter Zählhilfe schon fertig da
+    do {
+        s12ZsZahl = randomInt(1, 100);
+    } while (htZeile(s12ZsZahl) === 1 || htSpalte(s12ZsZahl) === 10);
+
+    s12ZsNachZeile = (Math.random() < 0.5);
+    s12ZsMarkiert = 0;
+    s12ZsFalsch = [];
+    s12ZsAufgeloest = false;
 
     coachZuruecksetzen();
+    coachZeichnen = station12ZeileSpalteZeichnen;   // die Schalter zeichnen die Aufgabe neu
 
-    // Worauf es ankommt, steht unterstrichen in der Frage - und der Pfeil
-    // dahinter zeigt gleich, wie die Zeile bzw. die Spalte läuft.
-    setInstruction('<span class="frage-gross">In welcher ' +
-                   '<span class="frage-wort">' + (nachZeile ? 'Zeile' : 'Spalte') + '</span>' +
-                   '<span class="frage-pfeil">' + (nachZeile ? '➡' : '⬇') + '</span>' +
-                   ' der Hundertertafel steht diese Zahl?</span>');
-    setTaskArea('<div class="zahl-gross">' + zahl + '</div>' +
-                zeileSpalteBildHTML(nachZeile) +
-                lerncoachHTML());
+    station12ZeileSpalteZeichnen();
+}
+
+function station12ZeileSpalteZeichnen() {
+    if (s12ZsMarkiert) {
+        // Worauf es ankommt, steht hervorgehoben in der Frage - und der Pfeil
+        // dahinter zeigt gleich, wie die Zeile bzw. die Spalte läuft.
+        setInstruction('<span class="frage-gross">In welcher ' +
+                       '<span class="frage-wort">' + (s12ZsNachZeile ? 'Zeile' : 'Spalte') + '</span>' +
+                       '<span class="frage-pfeil">' + (s12ZsNachZeile ? '➡' : '⬇') + '</span>' +
+                       ' steht dein Feld?</span>');
+    } else {
+        setInstruction('<span class="frage-gross">Markiere die ' +
+                       '<span class="frage-wort">' + s12ZsZahl + '</span>' +
+                       ' in der Hundertertafel.</span>');
+    }
+
+    // Das Schaubild kommt erst zur zweiten Frage dazu: beim Markieren
+    // geht es noch gar nicht um Zeile oder Spalte.
+    setTaskArea('<div class="zahl-gross">' + s12ZsZahl + '</div>' +
+                (s12ZsMarkiert ? zeileSpalteBildHTML(s12ZsNachZeile) : '') +
+                coachDauerHTML(station12ZeileSpalteZelle));
+}
+
+function station12ZeileSpalteZelle(zahl, hilfe) {
+    // Danebengetippt: das Feld bleibt rot stehen und zeigt seine Zahl -
+    // hier wohnt eben die 63 und nicht die 89.
+    if (s12ZsFalsch.indexOf(zahl) !== -1) {
+        return '<span class="ht-zelle ht-daneben">' + zahl + '</span>';
+    }
+
+    if (zahl === s12ZsZahl && (s12ZsMarkiert || s12ZsAufgeloest)) {
+        return '<span class="ht-zelle ' +
+               (s12ZsMarkiert ? 'ht-gefuellt' : 'ht-loesung') + '">' + zahl + '</span>';
+    }
+
+    if (s12ZsMarkiert || s12ZsAufgeloest) {
+        return '<span class="ht-zelle' + (hilfe ? ' ht-hilfszahl' : '') + '">' + hilfe + '</span>';
+    }
+
+    return '<button class="ht-zelle ht-feld' + (hilfe ? ' ht-hilfszahl' : '') +
+           '" onclick="station12ZeileSpalteTippe(' + zahl + ')">' + hilfe + '</button>';
+}
+
+function station12ZeileSpalteTippe(zahl) {
+    if (answerLocked || s12ZsMarkiert) return;
+
+    const hinweis = 'Die ' + s12ZsZahl + ' steht in Zeile ' + htZeile(s12ZsZahl) +
+                    ' und Spalte ' + htSpalte(s12ZsZahl) + '.';
+
+    if (zahl !== s12ZsZahl) {
+        if (s12ZsFalsch.indexOf(zahl) === -1) s12ZsFalsch.push(zahl);
+        // Beim zweiten Fehlversuch ist die Aufgabe vorbei: dann zeigt die
+        // Tafel, wo die Zahl gewohnt hätte
+        if (submitAnswer(false, hinweis)) s12ZsAufgeloest = true;
+        station12ZeileSpalteZeichnen();
+        return;
+    }
+
+    // Der erste Schritt zählt sofort - die Frage nach Zeile oder Spalte
+    // ist der zweite, und dafür beginnen die Versuche neu.
+    s12ZsMarkiert = zahl;
+    neuerSchritt();
+    stationScore++;
+    document.getElementById('stationScore').innerText = stationScore;
+
+    station12ZeileSpalteZeichnen();
+    station12ZeileSpalteFrage();
+}
+
+function station12ZeileSpalteFrage() {
+    const richtig = s12ZsNachZeile ? htZeile(s12ZsZahl) : htSpalte(s12ZsZahl);
 
     // Ablenker aus der Nachbarschaft der richtigen Linie. Die Kandidaten
     // reichen nach beiden Seiten weit genug, damit auch am Rand (Zeile 1,
@@ -2920,11 +3313,11 @@ function station12ZeileSpalte() {
         }
     });
 
-    const hinweis = 'Die ' + zahl + ' steht in Zeile ' + htZeile(zahl) +
-                    ' und Spalte ' + htSpalte(zahl) + '.';
+    const hinweis = 'Die ' + s12ZsZahl + ' steht in Zeile ' + htZeile(s12ZsZahl) +
+                    ' und Spalte ' + htSpalte(s12ZsZahl) + '.';
 
     renderOptions(shuffle(optionen), richtig, null, hinweis,
-        () => station12LinieZeigen(zahl, nachZeile));
+        () => station12LinieZeigen(s12ZsZahl, s12ZsNachZeile));
 }
 
 /* Nach der Antwort die Tafel mit der gesuchten Zeile oder Spalte -
@@ -2991,7 +3384,8 @@ function station12DreherZeichnen() {
         // Zahlen stehen nur da, wo eine Hilfe eingeschaltet ist
         const sichtbar = (s12DreherEiner && zahl <= 10) ||
                          (s12DreherZehner && htSpalte(zahl) === 10);
-        return '<span class="ht-zelle">' + (sichtbar ? zahl : '') + '</span>';
+        return '<span class="ht-zelle' + (sichtbar ? ' ht-hilfszahl' : '') + '">' +
+               (sichtbar ? zahl : '') + '</span>';
     });
 
     setTaskArea(
@@ -3084,7 +3478,8 @@ function station12KoenigZeichnen() {
         }
         const sichtbar = s12Vorgaben.indexOf(zahl) !== -1 ||
                          (s12KoenigZehner && htSpalte(zahl) === 10);
-        return '<span class="ht-zelle">' + (sichtbar ? zahl : '') + '</span>';
+        return '<span class="ht-zelle' + (sichtbar ? ' ht-hilfszahl' : '') + '">' +
+               (sichtbar ? zahl : '') + '</span>';
     });
 
     setTaskArea(
@@ -3443,14 +3838,20 @@ const STATIONS = [
             { name: 'Lücken füllen', emoji: '🔢',
               hinweis: 'Fehlende Zahlen in der Tafel ergänzen.',
               newTask: station12Luecken },
+            { name: 'Zahlen färben 1', emoji: '🎨',
+              hinweis: 'Drei Zeilen und drei Spalten färben.',
+              newTask: station12Faerben1 },
             { name: 'Zahlenkönig', emoji: '👑',
               hinweis: 'Auf welcher Zahl sitzt das Bild?',
               newTask: station12Koenig },
             { name: 'Wo wohnt die Zahl?', emoji: '🏠',
               hinweis: 'Das Feld in der leeren Tafel finden.',
               newTask: station12Wohnort },
+            { name: 'Zahlen färben 2', emoji: '🖍️',
+              hinweis: 'Aus den gefärbten Feldern wird ein Bild.',
+              newTask: station12Faerben2 },
             { name: 'Zeile und Spalte', emoji: '📐',
-              hinweis: 'In welcher Zeile, in welcher Spalte steht die Zahl?',
+              hinweis: 'Erst die Zahl markieren, dann Zeile oder Spalte nennen.',
               newTask: station12ZeileSpalte },
             { name: 'Zahlendreher', emoji: '🔄',
               hinweis: 'Steht dort die 47 oder die 74?',

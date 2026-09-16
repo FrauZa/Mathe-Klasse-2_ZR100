@@ -357,6 +357,12 @@ body {
 
 .check-btn:hover, .next-btn:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); }
 
+/* Startbildschirm: alle Aufgaben nacheinander */
+.check-btn.alles-btn {
+    background: linear-gradient(135deg, var(--color-modul1) 0%, var(--color-modul11) 100%);
+    font-size: 1.5rem;
+}
+
 /* Feedback Area */
 .feedback-area {
     min-height: 60px;
@@ -1757,6 +1763,8 @@ body {
     --ht-abstand: 3px;
     --ht-rand: 10px;
     display: grid;
+    --ht-fuenfer: #B0BEC5;
+    display: grid;
     grid-template-columns: repeat(10, minmax(0, 1fr));
     gap: var(--ht-abstand);
     padding: var(--ht-rand);
@@ -1778,6 +1786,8 @@ body {
 }
 
 .ht-zelle {
+    /* Bezugspunkt für die Fünferlinie, die neben der Zelle liegt */
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1788,6 +1798,44 @@ body {
     font-weight: 600;
     color: var(--color-text);
 }
+
+/* ---------- Fünfereinteilung der Tafel ---------- */
+/* Nach der fünften Spalte und der fünften Zeile läuft eine Fuge durch
+   die Tafel: vier Viertel zu 5 x 5 Feldern. Das Kind zählt dann nicht
+   mehr von 1 an ab, sondern springt in Fünfern - 5, 10, 15 ... Die
+   Linie wird in den Zwischenraum zwischen die Zellen gezeichnet,
+   damit die Feldgrösse sich nicht ändert. box-shadow scheidet dafür
+   aus: den belegen .ht-vorgabe und .ht-hilfszahl schon für sich. */
+.hundertertafel > .ht-zelle::before,
+.hundertertafel > .ht-zelle::after {
+    content: '';
+    position: absolute;
+    background: var(--ht-fuenfer);
+    pointer-events: none;
+}
+
+/* Senkrecht, rechts neben der fünften Spalte: die Zellen 5, 15 ... 95.
+   Jedes Stück reicht bis in die Fuge zur nächsten Zeile hinunter, damit
+   daraus eine durchgehende Linie wird - nur das unterste hört an seiner
+   Zelle auf, sonst ragte es in den Innenrand der Tafel. */
+.hundertertafel > .ht-zelle:nth-child(10n + 5)::after {
+    top: 0;
+    bottom: calc(var(--ht-abstand) * -1);
+    right: calc(var(--ht-abstand) * -1);
+    width: var(--ht-abstand);
+}
+
+.hundertertafel > .ht-zelle:nth-child(95)::after { bottom: 0; }
+
+/* Waagerecht, unter der fünften Zeile: die Zellen 41 bis 50 */
+.hundertertafel > .ht-zelle:nth-child(n + 41):nth-child(-n + 50)::before {
+    left: 0;
+    right: calc(var(--ht-abstand) * -1);
+    bottom: calc(var(--ht-abstand) * -1);
+    height: var(--ht-abstand);
+}
+
+.hundertertafel > .ht-zelle:nth-child(50)::before { right: 0; }
 
 /* Weggeschnitten: das Feld gehört nicht zum Stück */
 .ht-zelle.ht-leer {
@@ -1872,6 +1920,52 @@ body {
     box-shadow: 0 4px 0 #c62828;
 }
 
+/* ---------- Zahlen färben ---------- */
+/* Der Zettel mit den vorgegebenen Zahlen. Bewusst kleiner als die
+   Karten der anderen Aufgaben: hier wird nichts angetippt, hier wird
+   abgehakt - und zwanzig Zahlen sollen nebeneinander Platz finden. */
+.mal-liste {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    max-width: 560px;
+    margin: 0 auto 18px;
+}
+
+.mal-zahl {
+    padding: 4px 10px;
+    background: #fff;
+    border: 2px solid #90A4AE;
+    border-radius: 8px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+/* Schon gefärbt: durchgestrichen wie auf einem Einkaufszettel */
+.mal-zahl.mal-zahl-fertig {
+    opacity: 0.35;
+    text-decoration: line-through;
+}
+
+/* Wie weit die Aufgabe ist, wenn sie aus mehreren Linien besteht */
+.mal-schritt {
+    margin-bottom: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #78909C;
+    text-align: center;
+}
+
+/* Ein gefärbtes Feld: Buntstift-Orange, in jeder Aufgabe dasselbe. Das
+   Bild soll wie gemalt aussehen und nicht wie ein Teil der Bedienung -
+   deshalb hier nicht die Farbe der Station. */
+.ht-zelle.ht-gefaerbt {
+    background: #F57C00;
+    color: #fff;
+}
+
 /* ---------- Zahl selbst legen (Station 11) ---------- */
 .hf-tasten {
     display: flex;
@@ -1907,17 +2001,11 @@ body {
     cursor: pointer;
     padding: 0;
 }
+/* In der Tafel des Coachs gibt es kein --ht-farbe: dort führt die
+   Farbe des Coachs, damit die Felder auch dort auf Berührung antworten. */
 .ht-zelle.ht-feld:hover {
-    background: var(--ht-farbe);
+    background: var(--ht-farbe, var(--coach-farbe));
     opacity: 0.5;
-}
-
-/* Die vier Eckzahlen sind die Orientierung in der leeren Tafel */
-.ht-zelle.ht-ecke {
-    background: #fff;
-    color: var(--ht-farbe);
-    font-weight: 800;
-    box-shadow: inset 0 0 0 2px var(--ht-farbe);
 }
 
 /* Das danebengetippte Feld */
@@ -2051,95 +2139,37 @@ body {
     color: #90A4AE;
 }
 
-/* ---------- Tafel mit Zehner- und Einerrand (Lerncoach) ---------- */
-/* Die Randleisten übernehmen Zellengrösse, Abstand und Innenrand der
-   Tafel, damit Marke und Spalte bzw. Marke und Zeile genau
-   übereinanderliegen. */
-.ht-beschriftet {
-    --ht-zelle: 40px;
-    --ht-abstand: 3px;
-    --ht-rand: 10px;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: start;
-}
-
-/* Feste Plätze: die Tafel bleibt an ihrem Platz, auch wenn gerade nur
-   eine der beiden Randleisten eingeschaltet ist. */
-.ht-beschriftet > .hundertertafel {
-    grid-row: 2;
-    grid-column: 2;
-}
-
-.ht-kopf {
-    grid-row: 1;
-    grid-column: 2;
-    display: grid;
-    grid-template-columns: repeat(10, minmax(0, 1fr));
-    gap: var(--ht-abstand);
-    width: 100%;
-    max-width: calc(10 * var(--ht-zelle) + 9 * var(--ht-abstand) + 2 * var(--ht-rand));
-    margin: 0 auto;
-    padding: 0 var(--ht-rand) 4px;
-}
-
-.ht-seite {
-    grid-row: 2;
-    grid-column: 1;
-    display: grid;
-    grid-template-rows: repeat(10, var(--ht-zelle));
-    gap: var(--ht-abstand);
-    padding: var(--ht-rand) 4px var(--ht-rand) 0;
-}
-
-.ht-randmarke {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.95rem;
+/* ---------- Zaehlhilfe in der Tafel (Lerncoach) ---------- */
+/* Erste Reihe und letzte Spalte sind das Lineal, an dem abgezaehlt wird.
+   Die Zahlen stehen im Feld selbst - heller als eine Antwort, aber
+   deutlich genug, um daran entlangzugehen. Eine zweite Beschriftung
+   ausserhalb der Tafel braucht es damit nicht mehr. */
+.ht-zelle.ht-hilfszahl {
+    background: #fff;
+    box-shadow: inset 0 0 0 2px #CFD8DC;
+    font-size: calc(var(--ht-zelle) * 0.34);
     font-weight: 700;
-    color: #90A4AE;
+    color: #78909C;
 }
 
-/* Die Spalte der Zahlen mit 0 am Ende: der Sonderfall soll ins Auge
-   fallen, denn dort passt der Zehner nicht zur Zeile. */
-.ht-randmarke.ht-randmarke-null { color: #E65100; }
-
-/* ---------- Der Lerncoach (zuschaltbare Hundertertafel) ---------- */
+/* ---------- Das Tafel-Feld des Lerncoachs ---------- */
 .coach {
     margin-top: 22px;
     text-align: center;
     --coach-farbe: var(--color-modul12);
 }
 
-.coach-btn {
-    padding: 10px 22px;
-    font-family: inherit;
-    font-size: 1.05rem;
-    font-weight: 600;
-    color: var(--coach-farbe);
-    background: #fff;
-    border: 3px solid var(--coach-farbe);
-    border-radius: 12px;
-    cursor: pointer;
-    transition: background 0.2s, color 0.2s;
-}
-.coach-btn:hover { background: #F5F5F5; }
-.coach-btn.aktiv {
-    background: var(--coach-farbe);
-    color: #fff;
-}
-
 .coach-panel {
-    display: none;
     max-width: 520px;
-    margin: 14px auto 0;
+    margin: 0 auto;
     padding: 14px 16px 18px;
     background: #E8F5E9;
     border: 2px solid #A5D6A7;
     border-radius: 14px;
 }
-.coach-panel.sichtbar { display: block; }
+
+/* Das Feld steht nicht unter einem Knopf, sondern für sich */
+.coach-dauer { margin-top: 16px; }
 
 .coach-text {
     margin-bottom: 12px;
@@ -2338,9 +2368,7 @@ body {
     .waesche-korb { gap: 8px; margin-top: 28px; }
     .hf-bereich { --hf-punkt: 16px; --hf-luecke: 4px; --hf-abstand: 10px; padding: 12px 14px; gap: 10px; }
     .hf-marke { font-size: 0.8rem; }
-    .hundertertafel,
-    .ht-beschriftet { --ht-zelle: 30px; --ht-abstand: 2px; --ht-rand: 7px; }
-    .ht-randmarke { font-size: 0.8rem; }
+    .hundertertafel { --ht-zelle: 30px; --ht-abstand: 2px; --ht-rand: 7px; }
     .ht-ausschnitt { --ht-zelle: 62px; }
     .ht-zelle.ht-luecke, .ht-zelle.ht-dran { border-width: 2px; }
     .ht-karte { width: 60px; min-height: 50px; font-size: 1.2rem; }
@@ -2374,9 +2402,7 @@ body {
     .vorrat-karte { width: 56px; min-height: 50px; font-size: 1.2rem; }
     /* Die Hundertertafel muss mit zehn Spalten aufs Handy passen */
     .hf-bereich { --hf-punkt: 13px; --hf-luecke: 3px; --hf-abstand: 8px; }
-    .hundertertafel,
-    .ht-beschriftet { --ht-zelle: 26px; --ht-abstand: 2px; --ht-rand: 5px; }
-    .ht-randmarke { font-size: 0.75rem; }
+    .hundertertafel { --ht-zelle: 26px; --ht-abstand: 2px; --ht-rand: 5px; }
     .ht-ausschnitt { --ht-zelle: 52px; gap: 4px; }
     .ht-karte { width: 52px; min-height: 46px; font-size: 1.1rem; }
     .hf-taste { min-width: 62px; padding: 11px 10px; font-size: 1.2rem; }
