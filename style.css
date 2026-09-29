@@ -1013,23 +1013,12 @@ body {
     background: var(--zst-farbe);
 }
 .zst-strich.zst-strich-fuenfer {
-    width: 3px;
-    height: 14px;
+    width: 4px;
+    height: 16px;
 }
 .zst-strich.zst-strich-zehner {
     width: 4px;
     height: 20px;
-}
-
-/* Der kleine Punkt über dem Fünferstrich - nur beim Einordnen
-   (Station 13), wo das Kind selbst treffen muss und der Fünfer als
-   Zwischenlandmarke besonders auffallen soll. */
-.zst-fuenfer-punkt {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--zst-farbe);
-    margin-bottom: 4px;
 }
 .zst-zahl {
     margin-top: 6px;
