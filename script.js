@@ -98,6 +98,25 @@ function buildNumberOptions(correct, count, min, max) {
     return shuffle(options);
 }
 
+/* Ablenker dicht am Zielwert - anders als buildNumberOptions() sind das
+   keine Zehnerzahlen, sondern Nachbarn wie beim Ablesen am Zahlenstrahl.
+   ausschluss verhindert, dass eine in der Aufgabe schon sichtbare Zahl
+   (z.B. die vorgegebene Zahl oder ein Rand) zufällig auch als Ablenker
+   auftaucht - das würde nur verwirren. */
+function nahOptionen(ziel, anzahl, min, max, ausschluss) {
+    const gesperrt = ausschluss || [];
+    const werte = [ziel];
+    let guard = 0;
+    while (werte.length < anzahl && guard++ < 200) {
+        const kandidat = ziel + pick([-3, -2, -1, 1, 2, 3]);
+        if (kandidat >= min && kandidat <= max && werte.indexOf(kandidat) === -1 &&
+            gesperrt.indexOf(kandidat) === -1) {
+            werte.push(kandidat);
+        }
+    }
+    return shuffle(werte);
+}
+
 /* ============================================
    3. Zehnerstangen-Darstellung
    ============================================ */
@@ -3731,6 +3750,277 @@ function station13WegZeigen(pfad) {
 }
 
 /* ============================================
+   9i. Station 12: Zahlenstrahl ablesen
+   9i'. Station 13: Zahlenstrahl einordnen
+   Zwei eigenständige Stationen statt Unterstationen - beide teilen sich
+   denselben Zahlenstrahl-Baustein (zsPunktHTML/zsRahmenHTML):
+   - Zahl ablesen: ein Pfeil zeigt auf einen Strich, das Kind liest ab.
+   - Zahl einordnen: das Kind tippt selbst den richtigen Strich an.
+   ============================================ */
+let zsVon = 0;
+let zsBis = 0;
+let zsZiel = 0;
+let zsFalsch = [];
+let zsGetippt = 0;
+
+/* Ein Strich mit passendem Zehner-Label darunter. Drei Strichstärken
+   markieren Zehner, Fünfer und Einer - so lässt sich zum nächsten
+   Zehner oder Fünfer hochzählen, ohne jeden Strich einzeln zu zählen.
+   Präfix "zst-" (nicht "zs-"), damit es sich nicht mit den
+   Zehnerstangen-Klassen ("zs-...") aus Abschnitt 3 verwechselt. */
+function zsPunktHTML(i, inhalt) {
+    const istZehner = (i % 10 === 0);
+    const istFuenfer = (!istZehner && i % 5 === 0);
+    const strichKlasse = istZehner ? ' zst-strich-zehner' : (istFuenfer ? ' zst-strich-fuenfer' : '');
+    return '<div class="zst-punkt">' + (inhalt || '') +
+           '<div class="zst-strich' + strichKlasse + '"></div>' +
+           (istZehner ? '<div class="zst-zahl">' + i + '</div>' : '') +
+           '</div>';
+}
+
+function zsRahmenHTML(innen) {
+    return '<div class="zahlenstrahl" style="--zst-farbe: var(--color-' +
+           STATIONS[currentStationIndex].color + ');"><div class="zst-linie">' +
+           innen + '</div></div>';
+}
+
+/* Für "Zahl einordnen": ein Kasten um den ganzen Zahlenstrahl mit der
+   gesuchten Zahl groß darüber. Wer den Aufgabentext noch nicht flüssig
+   liest, sieht trotzdem sofort, welche Zahl gesucht ist und wo überall
+   getippt werden darf. */
+function zsZielKastenHTML(innen) {
+    return '<div class="zst-kasten" style="--zst-farbe: var(--color-' +
+           STATIONS[currentStationIndex].color + ');">' +
+           '<span class="zst-ziel-zahl">' + zsZiel + '</span>' +
+           '<div class="zst-linie">' + innen + '</div>' +
+           '</div>';
+}
+
+function stationZsAblesen() {
+    const basis = randomInt(0, 8) * 10;
+    zsVon = basis;
+    zsBis = basis + 20;
+    zsZiel = randomInt(zsVon + 1, zsBis - 1);
+
+    setInstruction('Auf welche Zahl zeigt der Pfeil?');
+
+    let innen = '';
+    for (let i = zsVon; i <= zsBis; i++) {
+        innen += zsPunktHTML(i, i === zsZiel ? '<span class="zst-pfeil">▼</span>' : '');
+    }
+    setTaskArea(zsRahmenHTML(innen));
+
+    const optionen = nahOptionen(zsZiel, 4, zsVon, zsBis);
+    renderOptions(optionen, zsZiel, null,
+        'Zähle vom Zehner ' + (Math.floor(zsZiel / 10) * 10) + ' aus weiter.');
+}
+
+function stationZsEinordnen() {
+    const basis = randomInt(0, 8) * 10;
+    zsVon = basis;
+    zsBis = basis + 10;
+    zsZiel = randomInt(zsVon + 1, zsBis - 1);
+    zsFalsch = [];
+    zsGetippt = 0;
+
+    setInstruction('Tippe die Stelle an, an der die ' + zsZiel + ' auf dem Zahlenstrahl steht.');
+    zsEinordnenZeichnen();
+}
+
+function zsEinordnenZeichnen() {
+    let innen = '';
+    for (let i = zsVon; i <= zsBis; i++) {
+        let inhalt = '';
+        if (zsFalsch.indexOf(i) !== -1) {
+            inhalt = '<span class="zst-daneben">' + i + '</span>';
+        } else if (zsGetippt && i === zsZiel) {
+            inhalt = '<span class="zst-treffer">' + i + '</span>';
+        } else if (!zsGetippt && i !== zsVon && i !== zsBis) {
+            inhalt = '<button class="zst-tick-btn" onclick="zsEinordnenTippe(' + i + ')" ' +
+                     'aria-label="' + i + '"></button>';
+        }
+        innen += zsPunktHTML(i, inhalt);
+    }
+    setTaskArea(zsZielKastenHTML(innen));
+}
+
+function zsEinordnenTippe(zahl) {
+    if (answerLocked) return;
+
+    const hinweis = 'Die ' + zsZiel + ' liegt zwischen ' + zsVon + ' und ' + zsBis + '.';
+    if (!submitAnswer(zahl === zsZiel, hinweis)) {
+        // Falsch getippt: das Feld bleibt stehen, gesucht wird weiter
+        if (zsFalsch.indexOf(zahl) === -1) zsFalsch.push(zahl);
+        zsEinordnenZeichnen();
+        return;
+    }
+
+    zsGetippt = zahl;
+    zsEinordnenZeichnen();
+}
+
+/* ============================================
+   9j. Station 16: Nachbarzahlen
+   9j'. Station 17: Nachbarzehner
+   Zwei eigenständige Stationen rund um die Nachbarn einer Zahl:
+   Vorgänger/Nachfolger und Nachbarzehner.
+   ============================================ */
+
+/* ---------- Vorgänger und Nachfolger ---------- */
+let vnZahl = 0, vnVor = 0, vnNach = 0, vnSchritt = 0;
+
+function stationVorgaengerNachfolger() {
+    vnZahl = randomInt(1, 99);
+    vnVor = vnZahl - 1;
+    vnNach = vnZahl + 1;
+    vnSchritt = 0;
+    vnZeichnen();
+}
+
+/* Die schon gelöste Lücke muss als gelöst gezeichnet werden - setTaskArea()
+   ersetzt beim Schrittwechsel die ganze Aufgabe, ein fillLuecke() von vorhin
+   wäre also gleich wieder weg. */
+function vnZeichnen() {
+    setInstruction(vnSchritt === 0
+        ? 'Welche Zahl kommt vor der ' + vnZahl + '?'
+        : 'Welche Zahl kommt nach der ' + vnZahl + '?');
+
+    const vorHTML = (vnSchritt === 0)
+        ? '<span class="zahl-karte luecke dran" id="vnVor">?</span>'
+        : '<span class="zahl-karte karte-geloest" id="vnVor">' + vnVor + '</span>';
+    const nachHTML = (vnSchritt === 1)
+        ? '<span class="zahl-karte luecke dran" id="vnNach">?</span>'
+        : '<span class="zahl-karte luecke" id="vnNach">?</span>';
+
+    setTaskArea(
+        '<div class="vergleich-aufgabe">' + vorHTML +
+        '<span class="zahl-karte">' + vnZahl + '</span>' + nachHTML +
+        '</div>'
+    );
+
+    const ziel = vnSchritt === 0 ? vnVor : vnNach;
+    const optionen = nahOptionen(ziel, 4, 0, 100, [vnZahl]);
+    const area = document.getElementById('stationOptions');
+    area.innerHTML = optionen.map(wert =>
+        '<button class="option-btn" onclick="vnPick(' + wert + ', this)">' + wert + '</button>'
+    ).join('');
+}
+
+function vnPick(wert, btn) {
+    if (answerLocked) return;
+    const ziel = vnSchritt === 0 ? vnVor : vnNach;
+
+    if (wert !== ziel) {
+        const hinweis = 'Der Vorgänger der ' + vnZahl + ' ist ' + vnVor +
+                        ', der Nachfolger ist ' + vnNach + '.';
+        if (!submitAnswer(false, hinweis)) {
+            btn.disabled = true;
+            btn.style.backgroundColor = '#ffcdd2';
+            btn.style.boxShadow = '0 5px 0 #c62828';
+            return;
+        }
+        // Endgültig falsch: beide Lücken jetzt vollständig zeigen
+        fillLuecke('vnVor', vnVor, false);
+        fillLuecke('vnNach', vnNach, false);
+        Array.from(document.getElementById('stationOptions').children).forEach(b => b.disabled = true);
+        return;
+    }
+
+    neuerSchritt();
+
+    if (vnSchritt === 0) {
+        vnSchritt = 1;
+        vnZeichnen();   // zeichnet den Vorgänger jetzt gelöst und fragt den Nachfolger
+        return;
+    }
+
+    fillLuecke('vnNach', ziel, true);
+    submitAnswer(true);   // beide Lücken richtig - Aufgabe geschafft
+}
+
+/* ---------- Nachbarzehner ---------- */
+let nzZahl = 0, nzVZ = 0, nzNZ = 0, nzSchritt = 0;
+
+function stationNachbarzehner() {
+    // Nur Zahlen, die selbst kein Zehner sind - sonst gibt es nichts zu suchen
+    do {
+        nzZahl = randomInt(1, 99);
+    } while (nzZahl % 10 === 0);
+
+    nzVZ = Math.floor(nzZahl / 10) * 10;
+    nzNZ = nzVZ + 10;
+    nzSchritt = 0;
+    nzZeichnen();
+}
+
+/* Ablenker: die Nachbarzehner links und rechts daneben - keine
+   beliebigen Zahlen, sonst würde schon das Raten reichen. */
+function nzOptionen(ziel) {
+    const kandidaten = [ziel, ziel - 10, ziel + 10, ziel + 20, ziel - 20];
+    const eindeutig = [];
+    kandidaten.forEach(w => { if (w >= 0 && w <= 100 && eindeutig.indexOf(w) === -1) eindeutig.push(w); });
+    return shuffle(eindeutig.slice(0, 4));
+}
+
+/* Wie bei vnZeichnen(): die schon gelöste Lücke wird als gelöst
+   mitgezeichnet, weil setTaskArea() die Aufgabe beim Schrittwechsel
+   komplett neu aufbaut. */
+function nzZeichnen() {
+    setInstruction(nzSchritt === 0
+        ? 'Welcher Zehner kommt vor der ' + nzZahl + '?'
+        : 'Welcher Zehner kommt nach der ' + nzZahl + '?');
+
+    const vorHTML = (nzSchritt === 0)
+        ? '<span class="zahl-karte luecke dran" id="nzVor">?</span>'
+        : '<span class="zahl-karte karte-geloest" id="nzVor">' + nzVZ + '</span>';
+    const nachHTML = (nzSchritt === 1)
+        ? '<span class="zahl-karte luecke dran" id="nzNach">?</span>'
+        : '<span class="zahl-karte luecke" id="nzNach">?</span>';
+
+    setTaskArea(
+        '<div class="vergleich-aufgabe">' + vorHTML +
+        '<span class="zahl-karte">' + nzZahl + '</span>' + nachHTML +
+        '</div>'
+    );
+
+    const ziel = nzSchritt === 0 ? nzVZ : nzNZ;
+    const area = document.getElementById('stationOptions');
+    area.innerHTML = nzOptionen(ziel).map(wert =>
+        '<button class="option-btn" onclick="nzPick(' + wert + ', this)">' + wert + '</button>'
+    ).join('');
+}
+
+function nzPick(wert, btn) {
+    if (answerLocked) return;
+    const ziel = nzSchritt === 0 ? nzVZ : nzNZ;
+
+    if (wert !== ziel) {
+        const hinweis = 'Die Nachbarzehner der ' + nzZahl + ' sind ' + nzVZ + ' und ' + nzNZ + '.';
+        if (!submitAnswer(false, hinweis)) {
+            btn.disabled = true;
+            btn.style.backgroundColor = '#ffcdd2';
+            btn.style.boxShadow = '0 5px 0 #c62828';
+            return;
+        }
+        fillLuecke('nzVor', nzVZ, false);
+        fillLuecke('nzNach', nzNZ, false);
+        Array.from(document.getElementById('stationOptions').children).forEach(b => b.disabled = true);
+        return;
+    }
+
+    neuerSchritt();
+
+    if (nzSchritt === 0) {
+        nzSchritt = 1;
+        nzZeichnen();   // zeichnet den Vorgängerzehner jetzt gelöst und fragt den nächsten
+        return;
+    }
+
+    fillLuecke('nzNach', ziel, true);
+    submitAnswer(true);
+}
+
+/* ============================================
    10. Stationen-Registrierung
    Neue Station = hier einen Eintrag ergänzen.
 
@@ -3879,6 +4169,20 @@ const STATIONS = [
         ]
     },
     {
+        name: 'Zahlenstrahl ablesen',
+        title: 'Zahlenstrahl: Zahl ablesen',
+        emoji: '👀',
+        color: 'modul14',
+        newTask: stationZsAblesen
+    },
+    {
+        name: 'Zahlenstrahl einordnen',
+        title: 'Zahlenstrahl: Zahl einordnen',
+        emoji: '🎯',
+        color: 'modul16',
+        newTask: stationZsEinordnen
+    },
+    {
         name: 'Zahlen vergleichen',
         title: 'Zahlen vergleichen',
         emoji: '⚖️',
@@ -3898,6 +4202,20 @@ const STATIONS = [
               hinweis: 'Die Zahlen absteigend aufhängen.',
               newTask: station10Absteigend }
         ]
+    },
+    {
+        name: 'Nachbarzahlen',
+        title: 'Nachbarzahlen',
+        emoji: '↔️',
+        color: 'modul15',
+        newTask: stationVorgaengerNachfolger
+    },
+    {
+        name: 'Nachbarzehner',
+        title: 'Nachbarzehner',
+        emoji: '🔟',
+        color: 'modul17',
+        newTask: stationNachbarzehner
     }
 ];
 
@@ -3916,29 +4234,31 @@ const BEREICHE = [
         emoji: '🔟',
         color: 'modul1',
         hinweis: '10, 20, 30 … – finden, ordnen und rechnen.',
-        stationen: [0, 1, 2, 3]
+        stationen: [0, 1, 2, 3],
+        gesperrt: true
     },
     {
         name: 'Zehner und Einer',
         emoji: '🔢',
         color: 'modul5',
         hinweis: 'Alle Zahlen bis 100 – hören, bauen, zerlegen und Paare finden.',
-        stationen: [4, 5, 6, 7]
+        stationen: [4, 5, 6, 7],
+        gesperrt: true
     },
     {
         name: 'Hunderterfeld',
         emoji: '💯',
         color: 'modul11',
         hinweis: 'Zahlen im Punktefeld ablesen und sich in der Hundertertafel zurechtfinden.',
-        stationen: [8, 9, 10]
+        stationen: [8, 9, 10],
+        gesperrt: true
     },
     {
         name: 'Zahlenstrahl',
         emoji: '📏',
         color: 'modul9',
-        hinweis: 'Zahlen vergleichen und der Größe nach an die Leine hängen.',
-        stationen: [11, 12],
-        gesperrt: true
+        hinweis: 'Zahlen auf dem Zahlenstrahl ablesen, einordnen und der Größe nach vergleichen.',
+        stationen: [11, 12, 13, 14, 15, 16]
     }
 ];
 

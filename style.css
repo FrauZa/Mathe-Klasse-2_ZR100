@@ -54,6 +54,22 @@
     --color-modul13: #D81B60;
     --color-modul13-light: #F48FB1;
 
+    /* Farben für Modul 14 */
+    --color-modul14: #E53935;
+    --color-modul14-light: #EF9A9A;
+
+    /* Farben für Modul 15 */
+    --color-modul15: #673AB7;
+    --color-modul15-light: #B39DDB;
+
+    /* Farben für Modul 16 */
+    --color-modul16: #FFA000;
+    --color-modul16-light: #FFD54F;
+
+    /* Farben für Modul 17 */
+    --color-modul17: #303F9F;
+    --color-modul17-light: #9FA8DA;
+
     --color-text: #333;
     --color-bg: #f5f5f5;
     --color-white: #ffffff;
@@ -182,6 +198,10 @@ body {
 .operation-btn.modul11 { background: linear-gradient(135deg, var(--color-modul11) 0%, var(--color-modul11-light) 100%); }
 .operation-btn.modul12 { background: linear-gradient(135deg, var(--color-modul12) 0%, var(--color-modul12-light) 100%); }
 .operation-btn.modul13 { background: linear-gradient(135deg, var(--color-modul13) 0%, var(--color-modul13-light) 100%); }
+.operation-btn.modul14 { background: linear-gradient(135deg, var(--color-modul14) 0%, var(--color-modul14-light) 100%); }
+.operation-btn.modul15 { background: linear-gradient(135deg, var(--color-modul15) 0%, var(--color-modul15-light) 100%); }
+.operation-btn.modul16 { background: linear-gradient(135deg, var(--color-modul16) 0%, var(--color-modul16-light) 100%); }
+.operation-btn.modul17 { background: linear-gradient(135deg, var(--color-modul17) 0%, var(--color-modul17-light) 100%); }
 
 .operation-btn .emoji { font-size: 3.5rem; }
 .operation-btn .hinweis {
@@ -638,6 +658,54 @@ body {
     box-shadow: 0 0 0 var(--color-modul13);
 }
 
+.modul14-color { color: var(--color-modul14); }
+.check-btn.modul14-color, .next-btn.modul14-color {
+    background: var(--color-modul14);
+}
+#stationOptions.modul14-opts .option-btn {
+    background-color: var(--color-modul14-light);
+    box-shadow: 0 5px 0 var(--color-modul14);
+}
+#stationOptions.modul14-opts .option-btn:active:not(:disabled) {
+    box-shadow: 0 0 0 var(--color-modul14);
+}
+
+.modul15-color { color: var(--color-modul15); }
+.check-btn.modul15-color, .next-btn.modul15-color {
+    background: var(--color-modul15);
+}
+#stationOptions.modul15-opts .option-btn {
+    background-color: var(--color-modul15-light);
+    box-shadow: 0 5px 0 var(--color-modul15);
+}
+#stationOptions.modul15-opts .option-btn:active:not(:disabled) {
+    box-shadow: 0 0 0 var(--color-modul15);
+}
+
+.modul16-color { color: var(--color-modul16); }
+.check-btn.modul16-color, .next-btn.modul16-color {
+    background: var(--color-modul16);
+}
+#stationOptions.modul16-opts .option-btn {
+    background-color: var(--color-modul16-light);
+    box-shadow: 0 5px 0 var(--color-modul16);
+}
+#stationOptions.modul16-opts .option-btn:active:not(:disabled) {
+    box-shadow: 0 0 0 var(--color-modul16);
+}
+
+.modul17-color { color: var(--color-modul17); }
+.check-btn.modul17-color, .next-btn.modul17-color {
+    background: var(--color-modul17);
+}
+#stationOptions.modul17-opts .option-btn {
+    background-color: var(--color-modul17-light);
+    box-shadow: 0 5px 0 var(--color-modul17);
+}
+#stationOptions.modul17-opts .option-btn:active:not(:disabled) {
+    box-shadow: 0 0 0 var(--color-modul17);
+}
+
 /* ============================================
    Station 5: Zahlen hören
    ============================================ */
@@ -908,6 +976,137 @@ body {
     background: #ffcdd2;
     border-color: #c62828;
     box-shadow: 0 4px 0 #c62828;
+}
+
+/* ============================================
+   Station 12: Zahlenstrahl ablesen
+   Station 13: Zahlenstrahl einordnen
+   Ein echter Strahl mit Strichen statt Zahlenkarten. Präfix "zst-",
+   damit nichts mit den Zehnerstangen-Klassen ("zs-...") kollidiert.
+   ============================================ */
+.zahlenstrahl {
+    width: 100%;
+    max-width: 640px;
+    margin: 40px auto 10px;
+}
+.zst-linie {
+    display: flex;
+    align-items: flex-end;
+    width: 100%;
+    border-bottom: 4px solid var(--zst-farbe);
+    padding-bottom: 6px;
+}
+.zst-punkt {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    min-width: 0;
+}
+/* Drei Strichstärken: Einer am dünnsten, Fünfer etwas dicker, Zehner
+   am dicksten - so lässt sich zum nächsten Fünfer oder Zehner
+   hochzählen, ohne jeden Strich einzeln nachzuzählen. */
+.zst-strich {
+    width: 2px;
+    height: 10px;
+    background: var(--zst-farbe);
+}
+.zst-strich.zst-strich-fuenfer {
+    width: 3px;
+    height: 14px;
+}
+.zst-strich.zst-strich-zehner {
+    width: 4px;
+    height: 20px;
+}
+
+/* Der kleine Punkt über dem Fünferstrich - nur beim Einordnen
+   (Station 13), wo das Kind selbst treffen muss und der Fünfer als
+   Zwischenlandmarke besonders auffallen soll. */
+.zst-fuenfer-punkt {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--zst-farbe);
+    margin-bottom: 4px;
+}
+.zst-zahl {
+    margin-top: 6px;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--zst-farbe);
+    white-space: nowrap;
+}
+.zst-pfeil {
+    position: absolute;
+    bottom: 100%;
+    font-size: 1.8rem;
+    line-height: 1;
+    color: var(--zst-farbe);
+    margin-bottom: 2px;
+    animation: zst-wackeln 1s ease-in-out infinite;
+}
+@keyframes zst-wackeln {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(4px); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .zst-pfeil { animation: none; }
+}
+
+/* Unsichtbarer Klick-Bereich über jedem Strich - breiter als der
+   Strich selbst, sonst trifft ein Kinderfinger ihn kaum. */
+.zst-tick-btn {
+    position: absolute;
+    bottom: -8px;
+    width: 32px;
+    height: 44px;
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+}
+.zst-tick-btn:active {
+    background: rgba(0, 0, 0, 0.08);
+    border-radius: 8px;
+}
+
+.zst-daneben, .zst-treffer {
+    position: absolute;
+    bottom: 100%;
+    margin-bottom: 4px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    padding: 2px 7px;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+.zst-daneben { background: #ffcdd2; color: #c62828; }
+.zst-treffer { background: #c8e6c9; color: #2e7d32; }
+
+/* Zahl einordnen: die gesuchte Zahl groß in einem Kasten über dem
+   Zahlenstrahl - wer den Aufgabentext noch nicht flüssig liest,
+   erkennt trotzdem sofort, wonach getippt wird. Der Zahlenstrahl
+   selbst bleibt ohne Rahmen, nur die Zahl steckt im Kasten. */
+.zst-kasten {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    max-width: 640px;
+    margin: 20px auto 10px;
+}
+.zst-ziel-zahl {
+    background: var(--color-white);
+    border: 5px solid var(--zst-farbe);
+    border-radius: 14px;
+    padding: 2px 24px;
+    font-size: 2.6rem;
+    font-weight: 800;
+    line-height: 1.15;
+    color: var(--zst-farbe);
+    white-space: nowrap;
 }
 
 /* ============================================
@@ -2380,6 +2579,12 @@ body {
     .koenig-legende { --ht-zelle: 44px; gap: 8px 12px; }
     .koenig-bild { font-size: 1.5rem; }
     .koenig-legende .ht-zelle { font-size: 1.1rem; }
+    .zahlenstrahl { margin: 34px auto 10px; }
+    .zst-zahl { font-size: 0.95rem; }
+    .zst-pfeil { font-size: 1.5rem; }
+    .zst-daneben, .zst-treffer { font-size: 0.8rem; padding: 1px 5px; }
+    .zst-kasten { margin: 16px auto 10px; gap: 12px; }
+    .zst-ziel-zahl { font-size: 2rem; padding: 2px 16px; }
     /* Die beiden Karten müssen nebeneinander bleiben - der Vergleich
        "quer gegen senkrecht" ist ja gerade der Sinn des Bildes. Die
        Zeile darunter ist der breiteste Teil, also schrumpft sie zuerst. */
