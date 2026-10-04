@@ -4234,24 +4234,21 @@ const BEREICHE = [
         emoji: '🔟',
         color: 'modul1',
         hinweis: '10, 20, 30 … – finden, ordnen und rechnen.',
-        stationen: [0, 1, 2, 3],
-        gesperrt: true
+        stationen: [0, 1, 2, 3]
     },
     {
         name: 'Zehner und Einer',
         emoji: '🔢',
         color: 'modul5',
         hinweis: 'Alle Zahlen bis 100 – hören, bauen, zerlegen und Paare finden.',
-        stationen: [4, 5, 6, 7],
-        gesperrt: true
+        stationen: [4, 5, 6, 7]
     },
     {
         name: 'Hunderterfeld',
         emoji: '💯',
         color: 'modul11',
         hinweis: 'Zahlen im Punktefeld ablesen und sich in der Hundertertafel zurechtfinden.',
-        stationen: [8, 9, 10],
-        gesperrt: true
+        stationen: [8, 9, 10]
     },
     {
         name: 'Zahlenstrahl',
