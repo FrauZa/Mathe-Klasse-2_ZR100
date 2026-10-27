@@ -35,12 +35,31 @@
     </div>
 
     <!-- ============================================
+         Auswahl innerhalb einer Gruppe (z. B. Zahlenraum bis 100).
+         Die Buttons werden aus MENUE in script.js erzeugt.
+         ============================================ -->
+    <div id="gruppeScreen" class="screen">
+        <div class="header">
+            <button class="back-btn" onclick="backFromGruppe()">
+                <span class="arrow">←</span> Zurück
+            </button>
+        </div>
+        <div class="content">
+            <h2 class="exercise-title" id="gruppeTitle">Gruppe</h2>
+            <p class="description">Was möchtest du üben?</p>
+            <div class="button-grid" id="gruppeButtonGrid">
+                <!-- JS füllt dies mit einem Button pro Bereich der Gruppe -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
          Auswahl der Station innerhalb eines Bereichs.
          Die Buttons werden aus BEREICHE in script.js erzeugt.
          ============================================ -->
     <div id="bereichScreen" class="screen">
         <div class="header">
-            <button class="back-btn" onclick="showScreen('startScreen')">
+            <button class="back-btn" onclick="backFromBereich()">
                 <span class="arrow">←</span> Zurück
             </button>
         </div>
@@ -70,6 +89,8 @@
         <div class="content">
             <h2 class="exercise-title" id="subTitle">Station</h2>
             <p class="description">Was möchtest du üben?</p>
+            <!-- Nur bei Stationen mit Erkläraufgabe (Rechnen bis 100) -->
+            <div id="subErklaerung"></div>
             <div class="button-grid" id="subButtonGrid">
                 <!-- JS füllt dies mit einem Button pro Unterkategorie -->
             </div>
@@ -169,7 +190,43 @@
                 <h2 class="exercise-title" id="stationCompleteTitle">Station geschafft!</h2>
                 <div id="stationNewStarIcon" style="font-size: 6rem; margin: 20px 0; color: gold; text-shadow: 0 0 15px rgba(255,215,0,0.8); transform: scale(0); transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);">⭐</div>
                 <p class="description" style="font-size: 1.5rem;">Ein weiterer Stern für dich!</p>
+                <!-- Nur beim Kopfrechnen: Trefferquote und Spickzettel -->
+                <div id="stationAuswertung"></div>
                 <button class="check-btn" id="stationProceedBtn" onclick="proceedToNextStation()">Zur nächsten Station</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         Erkläraufgabe: eine feste Beispielaufgabe, Schritt für Schritt
+         zum Mitmachen. Die Inhalte stehen bei der Station in script.js
+         (erklaerung).
+         ============================================ -->
+    <div id="erklaerScreen" class="screen exercise-screen">
+        <div class="header">
+            <button class="back-btn" onclick="backFromErklaerung()">
+                <span class="arrow">←</span> Zurück
+            </button>
+        </div>
+        <div class="content erk-content" id="erkInhalt">
+            <h2 class="exercise-title" id="erkTitel">Erkläraufgabe</h2>
+            <div class="erk-kopf">
+                <span class="erk-kicker">📖 So geht's</span>
+                <div class="hilfe-tasten">
+                    <button class="hilfe-btn" id="erkFarbeBtn" onclick="erkFarbeToggle()">🎨 Farbliche Unterstützung</button>
+                    <button class="hilfe-btn" id="erkMaterialBtn" onclick="erkMaterialToggle()">🧱 Zehnerstangen zeigen</button>
+                </div>
+            </div>
+            <div class="erk-fortschritt">
+                <span id="erkFortschritt">Beispiel</span>
+                <span class="erk-linie"><i id="erkBalken"></i></span>
+            </div>
+            <div id="erkBild" class="erk-bild"></div>
+            <div id="erkAuswahl" class="erk-auswahl"></div>
+            <div id="erkListe" class="erk-liste"></div>
+            <div class="erk-knoepfe">
+                <button class="coach-zurueck-btn" id="erkZurueck" onclick="erkZurueck()">← Zurück</button>
+                <button class="coach-weiter-btn" id="erkWeiter" onclick="erkWeiter()">Weiter →</button>
             </div>
         </div>
     </div>
@@ -190,6 +247,15 @@
             <div class="button-area">
                 <button class="check-btn" onclick="showScreen('startScreen')">Zurück zum Menü</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Spickzettel (Kopfrechnen) -->
+    <div id="spickzettel" class="spick-overlay" hidden onclick="if (event.target === this) krSpickzettelSchliessen()">
+        <div class="spick-karte">
+            <h2 id="spickTitel">Spickzettel 📋</h2>
+            <div id="spickInhalt"></div>
+            <button class="check-btn spick-schliessen" onclick="krSpickzettelSchliessen()">Schließen</button>
         </div>
     </div>
 

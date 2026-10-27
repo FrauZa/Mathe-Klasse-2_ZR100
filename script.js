@@ -12,6 +12,9 @@ function showScreen(screenId) {
     stopSprache();
     if (autoAdvanceTimeout) { clearTimeout(autoAdvanceTimeout); autoAdvanceTimeout = null; }
     stopDurchlaufPause();
+    rnTimerStoppen();
+    erkTimerStoppen();
+    krSpickzettelSchliessen();
     // Wer die Übung verlässt (Zurück, Tabs), beendet damit auch den Durchlauf
     if (screenId !== 'stationScreen') durchlauf = null;
 
@@ -273,6 +276,12 @@ function showSubStationScreen(index) {
 
     const grid = document.getElementById('subButtonGrid');
     grid.innerHTML = '';
+    // Stationen mit Erkläraufgabe oder Arbeitsblatt bieten das vor dem Üben an
+    const einstieg = erkEinstiegHTML(index) + abEinstiegHTML(index);
+    document.getElementById('subErklaerung').innerHTML = einstieg
+        ? '<div class="button-area erk-einstieg">' + einstieg + '</div><div id="abAuswahl"></div>'
+        : '';
+
     station.subStations.forEach((sub, i) => {
         grid.innerHTML +=
             '<button class="operation-btn ' + station.color + '" ' +
@@ -304,6 +313,8 @@ function showModeScreen(index, subIndex) {
         sub ? stationTitel(index) + ' – ' + sub.name : stationTitel(index);
     document.getElementById('modeTitle').className = 'exercise-title ' + station.color + '-color';
     document.getElementById('modeTempoBtn').className = 'operation-btn ' + station.color;
+    document.querySelector('#modeZeitBtn .hinweis').innerText =
+        stationZeit(index) / 60 + ' Minuten – schaffst du viele Punkte?';
     document.getElementById('modeZeitBtn').className = 'operation-btn ' + station.color;
 
     showScreen('modeScreen');
@@ -323,24 +334,7 @@ function buildStationUI() {
     stars.innerHTML = '';
     resultStars.innerHTML = '';
 
-    BEREICHE.forEach((bereich, i) => {
-        if (bereich.gesperrt) {
-            // Zu sehen, aber noch nicht zu öffnen: das Thema war noch nicht dran
-            grid.innerHTML +=
-                '<button class="operation-btn ' + bereich.color + ' bereich-zu" disabled>' +
-                '<span class="emoji">🔒</span>' +
-                '<span class="text">' + bereich.name + '</span>' +
-                '<span class="hinweis">Das hatten wir noch nicht – kommt später.</span>' +
-                '</button>';
-            return;
-        }
-        grid.innerHTML +=
-            '<button class="operation-btn ' + bereich.color + '" onclick="showBereich(' + i + ')">' +
-            '<span class="emoji">' + bereich.emoji + '</span>' +
-            '<span class="text">' + bereich.name + '</span>' +
-            '<span class="hinweis">' + bereich.hinweis + '</span>' +
-            '</button>';
-    });
+    grid.innerHTML = MENUE.map((eintrag, i) => menueKachelHTML(eintrag, String(i))).join('');
 
     // Ein Stern pro offener Station – der Gesamtfortschritt der App
     offeneStationen().forEach(i => {
@@ -351,11 +345,101 @@ function buildStationUI() {
     earnedStars = STATIONS.map(() => false);
 }
 
+/* Kachel eines Bereichs - auf dem Startbildschirm oder in einer Gruppe */
+function bereichKachelHTML(i) {
+    const bereich = BEREICHE[i];
+    if (bereich.gesperrt) {
+        // Zu sehen, aber noch nicht zu öffnen: das Thema war noch nicht dran
+        return '<button class="operation-btn ' + bereich.color + ' bereich-zu" disabled>' +
+               '<span class="emoji">🔒</span>' +
+               '<span class="text">' + bereich.name + '</span>' +
+               '<span class="hinweis">Das hatten wir noch nicht – kommt später.</span>' +
+               '</button>';
+    }
+    return '<button class="operation-btn ' + bereich.color + '" onclick="showBereich(' + i + ')">' +
+           '<span class="emoji">' + bereich.emoji + '</span>' +
+           '<span class="text">' + bereich.name + '</span>' +
+           '<span class="hinweis">' + bereich.hinweis + '</span>' +
+           '</button>';
+}
+
+/* Eine Kachel im Menü: entweder ein Bereich oder eine Gruppe.
+   pfad sagt, wo die Gruppe im Menü steht: "0" ist die erste Gruppe
+   des Startbildschirms, "0.0" die erste Gruppe darin. */
+function menueKachelHTML(eintrag, pfad) {
+    if (eintrag.bereich !== undefined) return bereichKachelHTML(eintrag.bereich);
+    return '<button class="operation-btn ' + eintrag.color + '" onclick="showGruppe(\'' + pfad + '\')">' +
+           '<span class="emoji">' + eintrag.emoji + '</span>' +
+           '<span class="text">' + eintrag.name + '</span>' +
+           '<span class="hinweis">' + eintrag.hinweis + '</span>' +
+           '</button>';
+}
+
+function gruppeNachPfad(pfad) {
+    let liste = MENUE, gruppe = null;
+    pfad.split('.').forEach(i => { gruppe = liste[Number(i)]; liste = gruppe.inhalt; });
+    return gruppe;
+}
+
+/* In welcher Gruppe steht ein Bereich? '' heißt: direkt im Menü */
+function pfadVonBereich(bereichIndex, liste, pfad) {
+    const eintraege = liste || MENUE;
+    for (let i = 0; i < eintraege.length; i++) {
+        const e = eintraege[i];
+        if (e.bereich === bereichIndex) return pfad || '';
+        if (e.inhalt) {
+            const gefunden = pfadVonBereich(bereichIndex, e.inhalt, (pfad ? pfad + '.' : '') + i);
+            if (gefunden !== null) return gefunden;
+        }
+    }
+    return null;
+}
+
+let aktiveGruppe = '';
+
+/* Den Inhalt einer Gruppe zur Auswahl anbieten */
+function showGruppe(pfad) {
+    aktiveGruppe = pfad;
+    const gruppe = gruppeNachPfad(pfad);
+    const titel = document.getElementById('gruppeTitle');
+    titel.innerText = gruppe.name;
+    titel.className = 'exercise-title ' + gruppe.color + '-color';
+    document.getElementById('gruppeButtonGrid').innerHTML =
+        gruppe.inhalt.map((eintrag, i) => menueKachelHTML(eintrag, pfad + '.' + i)).join('');
+    showScreen('gruppeScreen');
+}
+
+/* Zurück aus einer Gruppe: eine Ebene höher */
+function backFromGruppe() {
+    const oben = aktiveGruppe.split('.').slice(0, -1).join('.');
+    if (oben) showGruppe(oben);
+    else showScreen('startScreen');
+}
+
+/* Zurück aus einem Bereich: in seine Gruppe - steht er allein, ins Menü */
+function backFromBereich() {
+    const pfad = pfadVonBereich(aktiverBereich);
+    if (pfad) showGruppe(pfad);
+    else showScreen('startScreen');
+}
+
 /* Überschrift einer Station. Die Nummer steht nicht in der Liste,
    sondern ergibt sich aus der Reihenfolge - so stimmt sie auch, wenn
-   Stationen in einen anderen Bereich umziehen. */
+   Stationen in einen anderen Bereich umziehen. Beim Rechnen zählen
+   stattdessen die Stufen. */
 function stationTitel(index) {
-    return 'Station ' + (index + 1) + ': ' + STATIONS[index].title;
+    const station = STATIONS[index];
+    if (station.stufe) return 'Stufe ' + station.stufe + ': ' + station.title;
+    if (station.ohneNummer) return station.title;
+    return 'Station ' + (index + 1) + ': ' + station.title;
+}
+
+/* Kurzform für Knöpfe und Reiter: "3. Paare finden" oder "Stufe 2: Zehnerzahlen" */
+function stationKurz(index) {
+    const station = STATIONS[index];
+    if (station.stufe) return 'Stufe ' + station.stufe + ': ' + station.name;
+    if (station.ohneNummer) return station.name;
+    return (index + 1) + '. ' + station.name;
 }
 
 /* Zu welchem Bereich gehört eine Station? */
@@ -402,7 +486,7 @@ function showBereich(bereichIndex) {
         grid.innerHTML +=
             '<button class="operation-btn ' + station.color + '" onclick="openStation(' + index + ')">' +
             '<span class="emoji">' + station.emoji + '</span>' +
-            '<span class="text">' + (index + 1) + '. ' + station.name + '</span>' +
+            '<span class="text">' + stationKurz(index) + '</span>' +
             '</button>';
     });
 
@@ -421,7 +505,7 @@ function buildStationTabs(bereichIndex) {
     BEREICHE[bereichIndex].stationen.forEach(index => {
         tabs.innerHTML +=
             '<div class="tab" id="stationTab' + index + '" onclick="openStation(' + index + ')" ' +
-            'style="cursor: pointer;">' + (index + 1) + '. ' + STATIONS[index].name + '</div>';
+            'style="cursor: pointer;">' + stationKurz(index) + '</div>';
     });
 }
 
@@ -461,13 +545,20 @@ function switchSubStation(subIndex) {
     showModeScreen(currentStationIndex, subIndex);
 }
 
+/* Die meisten Stationen dauern 2 Minuten, das Kopfrechnen 3 - so lang
+   war die Runde schon in "Mathe Klasse 2". */
+function stationZeit(index) {
+    return STATIONS[index].zeit || STATION_ZEIT;
+}
+
 function startStation(index, subIndex, modus) {
     currentStationIndex = index;
     currentSubIndex = subIndex || 0;
     stationModus = modus || 'zeit';
     stationScore = 0;
     stationAufgabe = 0;
-    timeLeft = STATION_ZEIT;
+    timeLeft = stationZeit(index);
+    krRundeZuruecksetzen();
     answerLocked = false;
 
     const station = STATIONS[index];
@@ -546,8 +637,12 @@ function nextStationTask() {
 
    sofortAufloesen überspringt den zweiten Versuch. Das ist für Aufgaben
    mit nur zwei Antwortmöglichkeiten gedacht, bei denen die zweite Wahl
-   zwangsläufig die richtige wäre. */
-function submitAnswer(isCorrect, hinweis, sofortAufloesen) {
+   zwangsläufig die richtige wäre.
+
+   tipp steht nach dem ersten Fehlversuch da, statt nur "nochmal" -
+   so wie im Kopfrechentrainer. Er darf den Weg zeigen, aber nicht die
+   Lösung verraten. */
+function submitAnswer(isCorrect, hinweis, sofortAufloesen, tipp) {
     if (answerLocked) return true;
 
     const feedback = document.getElementById('stationFeedback');
@@ -560,8 +655,9 @@ function submitAnswer(isCorrect, hinweis, sofortAufloesen) {
         document.getElementById('stationScore').innerText = stationScore;
         feedback.className = 'feedback-area correct';
         text.innerText = pick(['Super! 🎉', 'Richtig! 👍', 'Genau! ⭐', 'Klasse! 🌟']);
-        // etwas Zeit, um die vollständige Lösung noch zu lesen
-        autoAdvanceTimeout = setTimeout(newStationTask, 1800);
+        // etwas Zeit, um die vollständige Lösung noch zu lesen - beim
+        // Kopfrechnen kürzer, dort zählt der Fluss
+        autoAdvanceTimeout = setTimeout(newStationTask, STATIONS[currentStationIndex].weiterNach || 1800);
         return true;
     }
 
@@ -570,7 +666,7 @@ function submitAnswer(isCorrect, hinweis, sofortAufloesen) {
     if (!sofortAufloesen && versuche < MAX_VERSUCHE) {
         // Der Hinweis verrät die Lösung - er kommt erst beim zweiten Fehler
         feedback.className = 'feedback-area nochmal';
-        text.innerText = pick(['Noch nicht ganz – versuch es nochmal! 🔁',
+        text.innerText = tipp ? tipp : pick(['Noch nicht ganz – versuch es nochmal! 🔁',
                                'Fast! Probier es noch einmal. 🔁',
                                'Schau nochmal genau hin, du hast noch einen Versuch. 🔁']);
         return false;
@@ -633,6 +729,9 @@ function endStationRound() {
     document.getElementById('stationCompleteTitle').innerText =
         (stationModus === 'tempo' ? 'Geschafft! ' : 'Zeit abgelaufen! ') +
         'Du hast ' + stationScore + ' Punkte gesammelt.';
+    // Das Kopfrechnen zeigt zusätzlich, wie viel mit und ohne Spickzettel ging
+    document.getElementById('stationAuswertung').innerHTML =
+        STATIONS[currentStationIndex].auswertung ? krAuswertungHTML() : '';
     document.getElementById('stationComplete').style.display = 'block';
     startKonfetti(70);
 
@@ -4021,6 +4120,1991 @@ function nzPick(wert, btn) {
 }
 
 /* ============================================
+   9c. Rechnen bis 100
+   Sechs Stufen, die aufeinander aufbauen. Jede Stufe ist eine Station,
+   ihre Aufgabenarten sind die Unterstationen. Alle Aufgabenarten teilen
+   sich dieselbe Übung: Aufgabe, Ziffernblock und drei Hilfen auf Abruf -
+   Zehnerstangen, (in Stufe 2) die kleine Aufgabe und der Lerncoach.
+
+   Abkürzungen wie in der Planung:
+   ZZ = Zehnerzahl (10 … 90), ZE = Zehner und Einer mit Einer ≠ 0,
+   E = Einer (1 … 9).
+   ============================================ */
+
+/* Stellen einer Zahl, damit Lerncoach und Erkläraufgabe einzelne
+   Ziffern ansprechen können - z. B. nur die Einer der 46. */
+function rnStellen(zahl) {
+    const ziffern = String(zahl).split('');
+    const namen = { 1: ['einer'], 2: ['zehner', 'einer'], 3: ['hunderter', 'zehner', 'einer'] }[ziffern.length];
+    return ziffern.map((ziffer, i) => ({ ziffer: ziffer, stelle: namen[i] }));
+}
+
+function rnZehner(zahl) { return Math.floor(zahl / 10); }
+function rnEiner(zahl)  { return zahl % 10; }
+
+/* ---------- Die Aufgabenarten ----------
+   neu:      würfelt a, op und b. Die Bedingungen stehen direkt in den
+             Grenzen der Zufallszahlen - so kann keine Aufgabe aus dem
+             Zahlenraum fallen, und es braucht keine Wiederholschleife.
+   luecke:   'b' heißt: gesucht ist die zweite Zahl (Ergänzen).
+   hinweis:  steht nach dem zweiten Fehlversuch da und zeigt den Weg.
+   coach:    die Schritte des Lerncoachs zu genau dieser Aufgabe.
+             ziele = was das Kind markiert, feld = Kästchen im
+             Rechenweg, das es selbst einträgt.
+   strich:   Sprünge am Rechenstrich (nur Stufe 5 und 6).
+   analogie: die kleine Aufgabe ohne Null (nur Stufe 2).
+   materialNachStelle: die Zehnerstangen sind immer blau, die Würfel
+             immer grün - auch ohne farbliche Unterstützung. */
+const RN_TYPEN = {
+    /* ---- Stufe 1 ---- */
+    zzPlusE: {
+        neu: () => ({ a: randomInt(1, 9) * 10, op: '+', b: randomInt(1, 9) }),
+        hinweis: t => rnZehner(t.a) + ' Zehner und ' + t.b + ' Einer sind ' + t.erg + '.',
+        coach: t => ({
+            schritte: [
+                { frage: 'Markiere die Zehner.', ziele: ['a.zehner'],
+                  antwort: t.a + ' sind ' + rnZehner(t.a) + ' Zehner.' },
+                { frage: 'Markiere die Einer, die dazukommen.', ziele: ['b'],
+                  antwort: t.b + ' Einer kommen dazu.' },
+                { frage: rnZehner(t.a) + ' Zehner und ' + t.b + ' Einer. Wie heißt die Zahl? Tippe sie ein.' }
+            ]
+        })
+    },
+    zeMinusEZ: {
+        /* Es wird genau der Einer abgezogen: 46 − 6 */
+        neu: () => {
+            const e = randomInt(1, 9);
+            return { a: randomInt(1, 9) * 10 + e, op: '−', b: e };
+        },
+        hinweis: t => 'Alle ' + t.b + ' Einer gehen weg. Es bleiben ' + t.erg + '.',
+        coach: t => ({
+            schritte: [
+                { frage: 'Markiere die Einer der ' + t.a + '.', ziele: ['a.einer'],
+                  antwort: 'Die ' + t.a + ' hat ' + rnEiner(t.a) + ' Einer.' },
+                { frage: 'Markiere, was weggeht.', ziele: ['b'],
+                  antwort: 'Alle ' + t.b + ' Einer gehen weg.' },
+                { frage: 'Was bleibt übrig? Tippe es ein.' }
+            ]
+        })
+    },
+
+    /* ---- Stufe 2 ---- */
+    zzPlusZz: {
+        neu: () => {
+            const x = randomInt(1, 9);
+            return { a: x * 10, op: '+', b: randomInt(1, 10 - x) * 10 };
+        },
+        hinweis: t => 'Rechne in Zehnern: ' + rnAnalogieText(t) + ', also ' + t.erg + '.',
+        analogie: true,
+        coach: t => rnCoachZehnerzahlen(t)
+    },
+    zzMinusZz: {
+        /* Hier darf auch die 100 vorne stehen: 100 − 30. Abgezogen wird
+           aber höchstens eine 90 - 100 − 100 wäre keine Zehnerzahl-Aufgabe. */
+        neu: () => {
+            const x = randomInt(1, 10);
+            return { a: x * 10, op: '−', b: randomInt(1, Math.min(x, 9)) * 10 };
+        },
+        hinweis: t => 'Rechne in Zehnern: ' + rnAnalogieText(t) + ', also ' + t.erg + '.',
+        analogie: true,
+        coach: t => rnCoachZehnerzahlen(t)
+    },
+
+    /* ---- Stufe 3 ---- */
+    zehnerDazu: {
+        /* Die Zahl mit Einern steht mal vorne (45 + 30), mal hinten
+           (40 + 26) - das Kind soll in beiden Fällen sehen, welche
+           Einer stehen bleiben. */
+        neu: () => {
+            const z = randomInt(1, 8);
+            const ze = z * 10 + randomInt(1, 9);
+            const zz = randomInt(1, 9 - z) * 10;
+            return Math.random() < 0.5 ? { a: ze, op: '+', b: zz } : { a: zz, op: '+', b: ze };
+        },
+        hinweis: t => rnHinweisZehnerDazu(t),
+        coach: t => rnCoachZehnerDazu(t, rnEiner(t.a) ? 'a' : 'b'),
+        /* Hier geht es darum, Zehner zu Zehnern zu legen - darum zeigt
+           das Material Zehner und Einer statt erster und zweiter Zahl. */
+        materialNachStelle: true
+    },
+    zeMinusZz: {
+        /* Die Einer der ersten Zahl bleiben stehen - das Ergebnis ist
+           darum nie kleiner als 1, auch bei 65 − 60. */
+        neu: () => {
+            const z = randomInt(1, 9);
+            return { a: z * 10 + randomInt(1, 9), op: '−', b: randomInt(1, z) * 10 };
+        },
+        hinweis: t => rnHinweisZehnerDazu(t),
+        coach: t => rnCoachZehnerDazu(t, 'a')
+    },
+
+    /* ---- Stufe 4 ---- */
+    zePlusE: {
+        /* Die Einer zusammen bleiben bei höchstens 9 */
+        neu: () => {
+            const e = randomInt(1, 8);
+            return { a: randomInt(1, 9) * 10 + e, op: '+', b: randomInt(1, 9 - e) };
+        },
+        hinweis: t => 'Der Zehner wartet: ' + rnEiner(t.a) + ' + ' + t.b + ' = ' + (rnEiner(t.a) + t.b) +
+                      ', also ' + t.erg + '.',
+        coach: t => rnCoachEinerOhne(t)
+    },
+    zeMinusE: {
+        /* Weg geht weniger, als Einer da sind: 38 − 5 */
+        neu: () => {
+            const e = randomInt(2, 9);
+            return { a: randomInt(1, 9) * 10 + e, op: '−', b: randomInt(1, e - 1) };
+        },
+        hinweis: t => 'Der Zehner wartet: ' + rnEiner(t.a) + ' − ' + t.b + ' = ' + (rnEiner(t.a) - t.b) +
+                      ', also ' + t.erg + '.',
+        coach: t => rnCoachEinerOhne(t)
+    },
+
+    /* ---- Stufe 5 ---- */
+    zeBisZehner: {
+        neu: () => {
+            const e = randomInt(1, 9);
+            return { a: randomInt(1, 9) * 10 + e, op: '+', b: 10 - e };
+        },
+        hinweis: t => rnEiner(t.a) + ' + ' + t.b + ' = 10 – du landest genau bei ' + t.erg + '.',
+        coach: t => ({
+            schritte: [
+                { frage: 'Markiere die Einer der ' + t.a + '.', ziele: ['a.einer'],
+                  antwort: 'Die ' + t.a + ' hat ' + rnEiner(t.a) + ' Einer.' },
+                { frage: 'Wie viel sind ' + rnEiner(t.a) + ' Einer und ' + t.b + ' Einer? Trage ein.', feld: 'k',
+                  antwort: rnEiner(t.a) + ' + ' + t.b + ' = 10. Ein neuer Zehner ist voll.' },
+                { frage: 'Du landest beim nächsten Zehner. Tippe das Ergebnis ein.' }
+            ],
+            weg: [[rnEiner(t.a), '+', t.b, '=', { feld: 'k' }]],
+            werte: { k: 10 }
+        }),
+        strich: (t, zustand) => [
+            { von: t.a, nach: t.erg, text: '+' + t.b, ende: zustand.geloest ? t.erg : '?' }
+        ]
+    },
+    ergaenzen: {
+        neu: () => {
+            const e = randomInt(1, 9);
+            return { a: randomInt(1, 9) * 10 + e, op: '+', b: 10 - e, luecke: 'b' };
+        },
+        anweisung: 'Wie viele fehlen bis zum Zehner? Tippe die Zahl ein.',
+        hinweis: t => 'Von ' + t.a + ' bis ' + t.erg + ' fehlen ' + t.b + ', denn ' +
+                      rnEiner(t.a) + ' + ' + t.b + ' = 10.',
+        coach: t => ({
+            schritte: [
+                { frage: 'Markiere die Zahl, bei der du startest.', ziele: ['a'],
+                  antwort: 'Du startest bei ' + t.a + '.' },
+                { frage: 'Markiere die Zahl, zu der du willst.', ziele: ['erg'],
+                  antwort: 'Du willst zur ' + t.erg + '.' },
+                { frage: 'Wie viele fehlen von ' + rnEiner(t.a) + ' bis 10? Zähle am Rechenstrich mit und tippe ein.' }
+            ]
+        }),
+        strich: (t, zustand) => [
+            { von: t.a, nach: t.erg, text: zustand.geloest ? '+' + t.b : '?',
+              offen: !zustand.geloest, ende: t.erg }
+        ]
+    },
+    zzMinusE: {
+        neu: () => ({ a: randomInt(2, 9) * 10, op: '−', b: randomInt(1, 9) }),
+        hinweis: t => 'Ein Zehner wird aufgemacht: 10 − ' + t.b + ' = ' + (10 - t.b) + '. ' +
+                      (rnZehner(t.a) - 1) + ' Zehner bleiben ganz – zusammen ' + t.erg + '.',
+        coach: t => ({
+            schritte: [
+                { frage: 'Markiere die Zehner der ' + t.a + '.', ziele: ['a.zehner'],
+                  antwort: t.a + ' sind ' + rnZehner(t.a) + ' Zehner. Einer sind keine da.' },
+                { frage: 'Ein Zehner wird aufgemacht. Rechne 10 − ' + t.b + '. Trage ein.', feld: 'k',
+                  antwort: '10 − ' + t.b + ' = ' + (10 - t.b) + '. Vom Zehner bleiben ' + (10 - t.b) + ' Einer.' },
+                { frage: (rnZehner(t.a) - 1) + ' Zehner bleiben ganz. Tippe das Ergebnis ein.' }
+            ],
+            weg: [[10, '−', t.b, '=', { feld: 'k' }]],
+            werte: { k: 10 - t.b }
+        }),
+        strich: (t, zustand) => [
+            { von: t.a, nach: t.erg, text: '−' + t.b, ende: zustand.geloest ? t.erg : '?' }
+        ]
+    },
+
+    /* ---- Stufe 6 ---- */
+    zePlusEUeber: {
+        /* Die Einer zusammen sind mindestens 11 - genau 10 wäre Stufe 5 */
+        neu: () => {
+            const e = randomInt(2, 9);
+            return { a: randomInt(1, 8) * 10 + e, op: '+', b: randomInt(11 - e, 9) };
+        },
+        hinweis: t => {
+            const w = rnUeberWeg(t);
+            return 'Erst bis zum Zehner: ' + t.a + ' + ' + w.m + ' = ' + w.zehner +
+                   '. Dann der Rest: ' + w.zehner + ' + ' + w.r + ' = ' + t.erg + '.';
+        },
+        coach: t => rnCoachUeber(t),
+        strich: (t, zustand) => rnStrichUeber(t, zustand)
+    },
+    zeMinusEUeber: {
+        /* Weg geht mehr, als Einer da sind: 42 − 5 */
+        neu: () => {
+            const e = randomInt(1, 8);
+            return { a: randomInt(1, 9) * 10 + e, op: '−', b: randomInt(e + 1, 9) };
+        },
+        hinweis: t => {
+            const w = rnUeberWeg(t);
+            return 'Erst zurück bis zum Zehner: ' + t.a + ' − ' + w.m + ' = ' + w.zehner +
+                   '. Dann der Rest: ' + w.zehner + ' − ' + w.r + ' = ' + t.erg + '.';
+        },
+        coach: t => rnCoachUeber(t),
+        strich: (t, zustand) => rnStrichUeber(t, zustand)
+    }
+};
+
+/* ---- Bausteine, die sich mehrere Aufgabenarten teilen ---- */
+
+/* Stufe 2: die Aufgabe ohne Nullen. 100 − 30 wird zu 10 − 3. */
+function rnAnalogieText(t) {
+    const x = t.a / 10, y = t.b / 10;
+    return x + ' ' + t.op + ' ' + y + ' = ' + (t.erg / 10);
+}
+
+function rnCoachZehnerzahlen(t) {
+    const x = t.a / 10, y = t.b / 10;
+    const plus = t.op === '+';
+    /* Bei der 100 steht der Zehner nicht an einer eigenen Stelle - die
+       ganze Zahl wird markiert, und der Coach sagt, wie viele es sind. */
+    const ersteZiele = t.a === 100 ? ['a', 'b.zehner'] : ['a.zehner', 'b.zehner'];
+    return {
+        schritte: [
+            { frage: 'Markiere die Zehner von beiden Zahlen.', ziele: ersteZiele,
+              antwort: t.a + ' sind ' + x + ' Zehner. ' + y + ' Zehner ' +
+                       (plus ? 'kommen dazu.' : 'gehen weg.') },
+            { frage: 'Rechne die kleine Aufgabe: ' + x + ' ' + t.op + ' ' + y + '. Trage ein.', feld: 'k',
+              antwort: x + ' ' + t.op + ' ' + y + ' = ' + (t.erg / 10) + '.' },
+            { frage: (t.erg / 10) + ' Zehner – wie heißt die Zahl? Tippe sie ein.' }
+        ],
+        weg: [[x, t.op, y, '=', { feld: 'k' }]],
+        wegZehner: true,
+        werte: { k: t.erg / 10 }
+    };
+}
+
+/* Stufe 3: nur die Zehner rechnen, die Einer bleiben stehen. */
+function rnHinweisZehnerDazu(t) {
+    const k = rnZehner(t.erg);
+    const einer = rnEiner(t.a) || rnEiner(t.b);
+    return 'Nur die Zehner rechnen: ' + rnZehner(t.a) + ' ' + t.op + ' ' + rnZehner(t.b) + ' = ' + k +
+           ' Zehner. Die ' + einer + ' Einer bleiben: ' + t.erg + '.';
+}
+
+/* mitEinern: welche der beiden Zahlen die Einer mitbringt */
+function rnCoachZehnerDazu(t, mitEinern) {
+    const za = rnZehner(t.a), zb = rnZehner(t.b), k = rnZehner(t.erg);
+    const einer = rnEiner(t[mitEinern]);
+    const plus = t.op === '+';
+    return {
+        schritte: [
+            { frage: 'Markiere die Zehner von beiden Zahlen.', ziele: ['a.zehner', 'b.zehner'],
+              antwort: za + ' Zehner und ' + zb + ' Zehner.' },
+            { frage: 'Wie viele Zehner sind es ' + (plus ? 'zusammen' : 'noch') + '? Trage ein.', feld: 'k',
+              antwort: za + ' ' + t.op + ' ' + zb + ' = ' + k + ' Zehner.' },
+            { frage: 'Markiere die Einer. Sie bleiben gleich.', ziele: [mitEinern + '.einer'],
+              antwort: 'Die ' + einer + ' Einer bleiben.' },
+            { frage: k + ' Zehner und ' + einer + ' Einer. Tippe das Ergebnis ein.' }
+        ],
+        weg: [[za, t.op, zb, '=', { feld: 'k' }]],
+        wegZehner: true,
+        werte: { k: k }
+    };
+}
+
+/* Stufe 4: der Zehner wartet, nur die Einer rechnen. */
+function rnCoachEinerOhne(t) {
+    const e = rnEiner(t.a);
+    const k = t.op === '+' ? e + t.b : e - t.b;
+    return {
+        schritte: [
+            { frage: t.op === '+' ? 'Markiere die Einer von beiden Zahlen.'
+                                  : 'Markiere die Einer der ' + t.a + ' und die Einer, die weggehen.',
+              ziele: ['a.einer', 'b'],
+              antwort: e + ' Einer und ' + t.b + ' Einer.' },
+            { frage: 'Der Zehner wartet. Rechne nur die Einer: ' + e + ' ' + t.op + ' ' + t.b + '. Trage ein.',
+              feld: 'k', antwort: e + ' ' + t.op + ' ' + t.b + ' = ' + k + '.' },
+            { frage: 'Der Zehner kommt wieder dazu. Tippe das Ergebnis ein.' }
+        ],
+        weg: [[e, t.op, t.b, '=', { feld: 'k' }]],
+        werte: { k: k }
+    };
+}
+
+/* Stufe 6: bis zum Zehner (m), dann der Rest (r).
+   37 + 5: m = 3, r = 2, zehner = 40
+   42 − 5: m = 2, r = 3, zehner = 40 */
+function rnUeberWeg(t) {
+    const plus = t.op === '+';
+    const m = plus ? 10 - rnEiner(t.a) : rnEiner(t.a);
+    return { m: m, r: t.b - m, zehner: plus ? t.a + m : t.a - m };
+}
+
+function rnCoachUeber(t) {
+    const w = rnUeberWeg(t);
+    const plus = t.op === '+';
+    return {
+        schritte: [
+            { frage: plus ? 'Wie viele fehlen von ' + t.a + ' bis ' + w.zehner + '? Trage ein.'
+                          : 'Wie viele gehen von ' + t.a + ' zurück bis ' + w.zehner + '? Trage ein.',
+              feld: 'm', antwort: t.a + ' ' + t.op + ' ' + w.m + ' = ' + w.zehner + '. Der Zehner ist erreicht.' },
+            { frage: 'Die ' + t.b + ' ist ' + w.m + ' und …? Trage den Rest ein.', feld: 'r',
+              antwort: 'Die ' + t.b + ' ist ' + w.m + ' und ' + w.r + '.' },
+            { frage: 'Rechne ' + w.zehner + ' ' + t.op + ' ' + w.r + '. Tippe das Ergebnis ein.' }
+        ],
+        weg: [[t.a, t.op, { feld: 'm' }, t.op, { feld: 'r' }, '=', '?']],
+        werte: { m: w.m, r: w.r }
+    };
+}
+
+function rnStrichUeber(t, zustand) {
+    const w = rnUeberWeg(t);
+    const hatM = zustand.weg.m !== undefined || zustand.geloest;
+    const hatR = zustand.weg.r !== undefined || zustand.geloest;
+    return [
+        { von: t.a, nach: w.zehner, text: hatM ? t.op + w.m : '?', offen: !hatM, ende: w.zehner },
+        { von: w.zehner, nach: t.erg, text: hatR ? t.op + w.r : '?', offen: !hatR,
+          ende: zustand.geloest ? t.erg : '?' }
+    ];
+}
+
+/* ---------- Zustand der laufenden Aufgabe ---------- */
+let rnKey = '';
+let rnTask = null;          // { a, op, b, erg, luecke, soll }
+let rnEingabe = '';
+let rnGeloest = null;       // null, solange offen - sonst { richtig }
+let rnLetzte = {};          // je Aufgabenart die letzte Aufgabe
+let rnHilfen = {};          // offene Hilfen dieser Aufgabe
+let rnCoachAn = false;
+let rnCoach = null;         // Schritte, Rechenweg und Werte
+let rnCoachSchritt = 0;
+let rnCoachBestaetigt = false;
+let rnCoachMarkiert = [];
+let rnWeg = {};             // schon eingetragene Kästchen des Rechenwegs
+let rnWegEingabe = '';
+let rnTimer = null;
+let rnPruefTimer = null;
+
+function rnTimerStoppen() {
+    if (rnTimer) { clearTimeout(rnTimer); rnTimer = null; }
+    if (rnPruefTimer) { clearTimeout(rnPruefTimer); rnPruefTimer = null; }
+}
+
+/* Zwei gleiche Aufgaben hintereinander gibt es nicht - auch nicht als
+   Tauschaufgabe: auf 40 + 26 folgt nicht 26 + 40. */
+function rnSchluessel(t) {
+    if (t.op === '+') return Math.min(t.a, t.b) + '+' + Math.max(t.a, t.b);
+    return t.a + '−' + t.b;
+}
+
+function rnNeueAufgabe(key) {
+    const typ = RN_TYPEN[key];
+    let t, guard = 0;
+    do {
+        t = typ.neu();
+    } while (rnSchluessel(t) === rnLetzte[key] && guard++ < 50);
+    rnLetzte[key] = rnSchluessel(t);
+
+    t.erg = t.op === '+' ? t.a + t.b : t.a - t.b;
+    t.luecke = t.luecke || 'erg';
+    t.soll = t.luecke === 'b' ? t.b : t.erg;
+    return t;
+}
+
+/* Einstieg aus der Stationen-Liste: jede Unterstation ruft das mit
+   ihrer Aufgabenart auf. */
+function rnAufgabe(key) {
+    rnTimerStoppen();
+    rnKey = key;
+    rnTask = rnNeueAufgabe(key);
+    rnEingabe = '';
+    rnGeloest = null;
+    /* Hilfen und Coach starten bei jeder Aufgabe wieder zu: das Kind
+       soll es zuerst selbst versuchen. */
+    rnHilfen = {};
+    rnCoachAn = false;
+    rnCoach = null;
+
+    setInstruction(RN_TYPEN[key].anweisung || 'Rechne. Tippe das Ergebnis ein.');
+    rnZeichnen();
+    renderCheckButton('Prüfen ✓', rnPruefen);
+    rnPruefknopfAktualisieren();
+}
+
+function rnFarbe() {
+    return 'var(--color-' + STATIONS[currentStationIndex].color + ')';
+}
+
+/* Die ganze Aufgabe wird bei jeder Änderung neu gezeichnet. Das ist
+   bei so wenig Inhalt schneller gemacht als jede Stelle einzeln
+   nachzuführen - und es kann nichts aus dem Tritt geraten. */
+function rnZeichnen() {
+    setTaskArea(
+        '<div class="rn-bereich' + (rnHilfen.farbe ? ' rn-farbig' : '') + '" ' +
+        'style="--hoer-farbe: ' + rnFarbe() + '; --rn-farbe: ' + rnFarbe() + ';">' +
+        rnAufgabeHTML() +
+        rnHilfenHTML() +
+        rnCoachHTML() +
+        rnTastenHTML() +
+        '</div>'
+    );
+}
+
+/* Die Ziffern einer Zahl, jede mit ihrer Stelle als Namen. Daran
+   hängen der Coach ("Markiere die Einer der 46") und die farbliche
+   Unterstützung (Hunderter rot, Zehner blau, Einer grün).
+   laenge: so viele Stellen hat die fertige Zahl. Beim Eintippen ist die
+   erste Ziffer von 46 schon ein Zehner, obwohl erst "4" dasteht - sonst
+   würde sie grün und beim zweiten Tipp plötzlich blau. */
+function rnZiffernHTML(zahl, laenge) {
+    const text = String(zahl);
+    const namen = rnStellen(Math.pow(10, Math.max(laenge || 0, text.length) - 1)).map(s => s.stelle);
+    return text.split('').map((ziffer, i) =>
+        '<span class="rn-ziffer" data-stelle="' + namen[i] + '">' + ziffer + '</span>').join('');
+}
+
+/* Ein Platz der Aufgabe */
+function rnZahlHTML(platz, zahl, klasse) {
+    return '<span class="rn-platz' + (klasse ? ' ' + klasse : '') + '" data-platz="' + platz + '">' +
+           rnZiffernHTML(zahl) + '</span>';
+}
+
+/* Eine kleine Rechnung als Text mit gefärbten Ziffern. zehner: die
+   Zahlen zählen Zehner (3 + 4 = 7 bei 30 + 40) und werden darum ganz
+   blau - eine grüne 3 sagte sonst "Einer". */
+function rnRechnungHTML(teile, zehner) {
+    return '<span class="rn-rechnung' + (zehner ? ' rn-zehnerzeile' : '') + '">' +
+           teile.map(t => typeof t === 'number' ? rnZiffernHTML(t) : t).join(' ') + '</span>';
+}
+
+function rnLueckeHTML() {
+    const t = rnTask;
+    if (rnGeloest) {
+        return '<span class="zahl-karte ' + (rnGeloest.richtig ? 'karte-geloest leuchtet' : 'karte-loesung') +
+               ' rn-eingabe" id="rnEingabe" data-platz="' + t.luecke + '">' + rnZiffernHTML(t.soll) + '</span>';
+    }
+    const dran = rnAktivesFeld() ? '' : ' dran';
+    return '<span class="zahl-karte luecke rn-eingabe' + dran + '" id="rnEingabe" data-platz="' + t.luecke + '">' +
+           (rnEingabe === '' ? '?' : rnZiffernHTML(rnEingabe, String(t.soll).length)) + '</span>';
+}
+
+function rnAufgabeHTML() {
+    const t = rnTask;
+    /* Ohne Hilfe sind alle Zahlen schwarz. Mit Zehnerstangen haben die
+       beiden Zahlen beim Plus die Farben ihrer Stangen (blau und orange).
+       Die farbliche Unterstützung färbt stattdessen nach der Stelle -
+       dann auch das Material, damit Zahl und Bild zusammenpassen.
+       Färbt eine Aufgabenart ihr Material immer nach der Stelle, bleiben
+       die Zahlen ohne Farbhilfe schwarz. */
+    const mengen = t.op === '+' && rnHilfen.material && !rnHilfen.farbe &&
+                   !RN_TYPEN[rnKey].materialNachStelle;
+    const a = rnZahlHTML('a', t.a, mengen ? 'menge-a' : '');
+    const b = t.luecke === 'b' ? rnLueckeHTML() : rnZahlHTML('b', t.b, mengen ? 'menge-b' : '');
+    const erg = t.luecke === 'erg' ? rnLueckeHTML() : rnZahlHTML('erg', t.erg);
+    const markieren = rnCoachWartetAufMarkierung() ? ' markieren' : '';
+    return '<div class="rechen-aufgabe gross rn-aufgabe' + markieren + '" id="rnAufgabe" onclick="rnMarkiere(event)">' +
+           a + '<span class="rn-zeichen">' + t.op + '</span>' + b +
+           '<span class="rn-zeichen">=</span>' + erg + '</div>';
+}
+
+/* ---------- Hilfen auf Abruf ---------- */
+function rnHilfenHTML() {
+    const typ = RN_TYPEN[rnKey];
+    if (typ.kopfrechnen) return krHilfenHTML();
+    const knopf = (name, an, aus, ein) =>
+        '<button class="hilfe-btn' + (ein ? ' aktiv' : '') + '" onclick="rnHilfeToggle(\'' + name + '\')">' +
+        (ein ? an : aus) + '</button>';
+
+    let html = '<div class="hilfe-bereich" style="--hilfe-farbe: ' + rnFarbe() + ';"><div class="hilfe-tasten">' +
+        knopf('farbe', '🎨 Farben ausblenden', '🎨 Farbliche Unterstützung', rnHilfen.farbe) +
+        knopf('material', '🧱 Zehnerstangen ausblenden', '🧱 Mit Zehnerstangen zeigen', rnHilfen.material) +
+        (typ.analogie ? knopf('analogie', '🔍 Kleine Aufgabe ausblenden', '🔍 Kleine Aufgabe zeigen', rnHilfen.analogie) : '') +
+        knopf('coach', '🧑‍🏫 Lerncoach schließen', '🧑‍🏫 Lerncoach', rnCoachAn) +
+        '</div>';
+    if (typ.analogie && rnHilfen.analogie) {
+        const t = rnTask;
+        html += '<div class="hilfe-inhalt sichtbar rn-analogie">' +
+                '<span class="rn-analogie-klein">' +
+                rnRechnungHTML([t.a / 10, t.op, t.b / 10, '=', t.erg / 10], true) + '</span>' +
+                '<span class="rn-analogie-pfeil">➜</span>' +
+                rnRechnungHTML([t.a, t.op, t.b, '=', '?']) + '</div>';
+    }
+    if (rnHilfen.material) {
+        html += '<div class="hilfe-inhalt sichtbar">' + rnMaterialHTML(rnTask, rnHilfen.farbe || !!RN_TYPEN[rnKey].materialNachStelle) + '</div>';
+    }
+    return html + '</div>';
+}
+
+function rnHilfeToggle(name) {
+    if (name === 'coach') {
+        rnCoachAn = !rnCoachAn;
+        if (rnCoachAn) rnCoachStarten();
+        else rnTimerStoppen();
+    } else {
+        rnHilfen[name] = !rnHilfen[name];
+    }
+    rnZeichnen();
+}
+
+/* ---------- Material: Zehnerstangen und Einerwürfel ---------- */
+/* Eine Stange, bei der oben einzelne Felder weggenommen sind - so
+   sieht man bei 40 − 6, dass ein Zehner aufgemacht wird. */
+function rnStangeHTML(variant, wegFelder, wegGanz, extraClass) {
+    let felder = '';
+    for (let i = 0; i < 10; i++) {
+        felder += '<span class="zs-feld' + (i < wegFelder ? ' feld-weg' : '') + '"></span>';
+    }
+    return '<div class="zehnerstange zs-' + variant + (wegGanz ? ' zs-crossed' : '') +
+           (extraClass ? ' ' + extraClass : '') + '">' + felder + '</div>';
+}
+
+/* Würfel in Fünferspalten wie in Station 5. liste enthält je Würfel
+   seine Zusatzklasse ('einer-a', 'einer-weg', 'einer-leer' …). */
+function rnWuerfelHTML(liste) {
+    if (!liste.length) return '';
+    let html = '<div class="einer-block">';
+    for (let i = 0; i < liste.length; i += 5) {
+        html += '<div class="einer-spalte">' +
+                liste.slice(i, i + 5).map(k => '<span class="einer-wuerfel ' + k + '"></span>').join('') +
+                '</div>';
+    }
+    return html + '</div>';
+}
+
+/* Eine Zahl als Bild. opts:
+   leer       - leere Plätze, die die Einer zum Zehner auffüllen (Ergänzen)
+   wegStangen - so viele Stangen von hinten sind weggenommen
+   wegWuerfel - so viele Würfel von hinten sind weggenommen
+   wegFelder  - so viele Felder der letzten ganzen Stange sind weg
+   nachStelle - Farben nach der Stelle: Stangen blau, Würfel grün */
+function rnBildHTML(zahl, variant, opts) {
+    const o = opts || {};
+    const wuerfelKlasse = o.nachStelle ? 'gruen' : variant;
+    if (o.nachStelle) variant = 'a';
+    const z = rnZehner(zahl), e = rnEiner(zahl);
+    let stangen = '';
+    for (let i = 0; i < z; i++) {
+        const ganzWeg = i >= z - (o.wegStangen || 0);
+        const letzteGanze = i === z - (o.wegStangen || 0) - 1;
+        stangen += rnStangeHTML(variant, letzteGanze ? (o.wegFelder || 0) : 0, ganzWeg,
+                                i === 5 ? 'zs-nach-luecke' : '');
+    }
+    const wuerfel = [];
+    for (let i = 0; i < e; i++) wuerfel.push('einer-' + wuerfelKlasse + (i >= e - (o.wegWuerfel || 0) ? ' einer-weg' : ''));
+    for (let i = 0; i < (o.leer || 0); i++) wuerfel.push('einer-leer');
+
+    return '<div class="rn-bild">' +
+           (stangen ? '<div class="zs-reihe">' + stangen + '</div>' : '') +
+           rnWuerfelHTML(wuerfel) + '</div>';
+}
+
+/* nachStelle: die farbliche Unterstützung ist an */
+function rnMaterialHTML(t, nachStelle) {
+    if (t.op === '+') {
+        /* Beim Ergänzen gibt es keine zweite Menge zu zeigen - sie ist
+           ja gesucht. Stattdessen stehen leere Plätze da, bis der
+           Zehner voll ist. */
+        if (t.luecke === 'b') {
+            return '<div class="rn-material">' + rnBildHTML(t.a, 'a', { leer: t.b, nachStelle: nachStelle }) + '</div>';
+        }
+        return '<div class="rn-material">' + rnBildHTML(t.a, 'a', { nachStelle: nachStelle }) +
+               '<span class="rn-material-zeichen">+</span>' +
+               rnBildHTML(t.b, 'b', { nachStelle: nachStelle }) + '</div>';
+    }
+    /* Minus: eine Menge, das Weggenommene ist durchgestrichen. Reichen
+       die Einer nicht, wird aus der nächsten Stange weggenommen. */
+    const e = rnEiner(t.a);
+    const wegZehner = rnZehner(t.b), wegEiner = rnEiner(t.b);
+    const opts = wegEiner <= e
+        ? { wegStangen: wegZehner, wegWuerfel: wegEiner }
+        : { wegStangen: wegZehner, wegWuerfel: e, wegFelder: wegEiner - e };
+    opts.nachStelle = nachStelle;
+    return '<div class="rn-material">' + rnBildHTML(t.a, 'a', opts) + '</div>';
+}
+
+/* ---------- Rechenstrich ---------- */
+/* Ein Strich ohne Maßstab-Anspruch, aber mit Sprüngen in passender
+   Größe. spruenge: [{ von, nach, text, ende, offen }]
+   offen zeichnet den Bogen gestrichelt: dieser Sprung ist noch nicht
+   bekannt. ende ist die Beschriftung am Landepunkt ('?' oder Zahl). */
+function rnStrichHTML(spruenge) {
+    const B = 480, H = 132, Y = 92;
+    const werte = [];
+    spruenge.forEach(s => { werte.push(s.von, s.nach); });
+    const lo = Math.min.apply(null, werte), hi = Math.max.apply(null, werte);
+    const x = v => hi === lo ? B / 2 : 50 + (v - lo) * (B - 100) / (hi - lo);
+
+    let svg = '<line class="rn-strich-linie" x1="12" y1="' + Y + '" x2="' + (B - 12) + '" y2="' + Y + '"/>';
+    const punkt = (v, text) =>
+        '<line class="rn-strich-marke" x1="' + x(v) + '" y1="' + (Y - 9) + '" x2="' + x(v) + '" y2="' + (Y + 9) + '"/>' +
+        '<text class="rn-strich-zahl' + (text === '?' ? ' offen' : '') + '" x="' + x(v) + '" y="' + (Y + 33) + '">' + text + '</text>';
+
+    svg += punkt(spruenge[0].von, spruenge[0].von);
+    spruenge.forEach(s => {
+        const x1 = x(s.von), x2 = x(s.nach);
+        const h = 62, cx = (x1 + x2) / 2, cy = Y - h;
+        svg += '<path class="rn-strich-bogen' + (s.offen ? ' offen' : '') + '" d="M ' + x1 + ' ' + (Y - 4) +
+               ' Q ' + cx + ' ' + cy + ' ' + x2 + ' ' + (Y - 4) + '"/>';
+        /* Pfeilspitze in Richtung der Kurve am Landepunkt */
+        const dx = x2 - cx, dy = (Y - 4) - cy, len = Math.sqrt(dx * dx + dy * dy);
+        const ux = dx / len, uy = dy / len;
+        const bx = x2 - ux * 12, by = (Y - 4) - uy * 12;
+        svg += '<polygon class="rn-strich-spitze" points="' + x2 + ',' + (Y - 4) + ' ' +
+               (bx - uy * 6) + ',' + (by + ux * 6) + ' ' + (bx + uy * 6) + ',' + (by - ux * 6) + '"/>';
+        svg += '<text class="rn-strich-text' + (s.text === '?' ? ' offen' : '') + '" x="' + cx + '" y="' + (Y - h / 2 - 12) + '">' +
+               s.text + '</text>';
+        svg += punkt(s.nach, s.ende);
+    });
+    return '<div class="rn-strich"><svg viewBox="0 0 ' + B + ' ' + H + '" role="img" aria-label="Rechenstrich">' +
+           svg + '</svg></div>';
+}
+
+/* ---------- Lerncoach ---------- */
+function rnCoachStarten() {
+    rnCoach = RN_TYPEN[rnKey].coach(rnTask);
+    rnCoachSchritt = 0;
+    rnCoachBestaetigt = false;
+    rnCoachMarkiert = [];
+    rnWeg = {};
+    rnWegEingabe = '';
+}
+
+function rnCoachAktuell() {
+    return rnCoach ? rnCoach.schritte[rnCoachSchritt] : null;
+}
+
+/* Ist der aktuelle Schritt erledigt? Markieren: wenn alles gefunden
+   ist. Eintragen: wenn das Kästchen gefüllt ist. Der letzte Schritt
+   ist nur eine Aufforderung - die Antwort gibt das Kind unten ein. */
+function rnCoachSchrittFertig() {
+    const s = rnCoachAktuell();
+    if (!s) return false;
+    if (s.feld) return rnWeg[s.feld] !== undefined;
+    if (s.ziele) return rnCoachBestaetigt;
+    return true;
+}
+
+function rnCoachWartetAufMarkierung() {
+    const s = rnCoachAn && !rnGeloest ? rnCoachAktuell() : null;
+    return !!(s && s.ziele && !rnCoachBestaetigt);
+}
+
+/* In welches Kästchen gehen die Ziffern gerade? Steht der Coach bei
+   einem Kästchen, das noch leer ist, dann dorthin - sonst ins Ergebnis. */
+function rnAktivesFeld() {
+    const s = rnCoachAn && !rnGeloest ? rnCoachAktuell() : null;
+    return s && s.feld && rnWeg[s.feld] === undefined ? s.feld : null;
+}
+
+function rnCoachHTML() {
+    if (!rnCoachAn || !rnCoach) return '';
+    const s = rnCoachAktuell();
+    const fertig = rnCoachSchrittFertig();
+    const letzter = rnCoachSchritt === rnCoach.schritte.length - 1;
+    const text = fertig && s.antwort
+        ? '<strong>Genau:</strong> ' + s.antwort
+        : '<strong>Denke kurz nach:</strong> ' + s.frage;
+
+    let html = '<div class="rn-coach">' +
+        '<div class="rn-coach-kopf"><span class="rn-coach-avatar">🧑‍🏫</span>' +
+        '<p class="rn-coach-text" id="rnCoachText">' + text + '</p></div>';
+
+    if (rnCoach.weg) html += rnWegHTML();
+    const typ = RN_TYPEN[rnKey];
+    if (typ.strich) html += rnStrichHTML(typ.strich(rnTask, { weg: rnWeg, geloest: !!rnGeloest }));
+
+    html += '<div class="rn-coach-knoepfe">' + vorleseKnopfHTML("lesVorAus('rnCoachText')") +
+        '<button class="coach-zurueck-btn" onclick="rnCoachZurueck()"' + (rnCoachSchritt === 0 ? ' disabled' : '') +
+        '>← Zurück</button>' +
+        (letzter ? '' : '<button class="coach-weiter-btn" onclick="rnCoachWeiter()">' +
+                        (fertig ? 'Weiter →' : 'Zeig es mir') + '</button>') +
+        '</div></div>';
+    return html;
+}
+
+/* Der Rechenweg unter der Frage: Zahlen, Zeichen und Kästchen, die das
+   Kind mit dem Ziffernblock füllt. */
+function rnWegHTML() {
+    const aktiv = rnAktivesFeld();
+    const zehner = rnCoach.wegZehner ? ' rn-zehnerzeile' : '';
+    return rnCoach.weg.map(zeile => '<div class="rn-weg' + zehner + '">' + zeile.map(teil => {
+        if (teil && teil.feld) {
+            const name = teil.feld;
+            const laenge = String(rnCoach.werte[name]).length;
+            if (rnWeg[name] !== undefined) return '<span class="rn-weg-kasten gefuellt">' + rnZiffernHTML(rnWeg[name]) + '</span>';
+            if (name === aktiv) {
+                return '<span class="rn-weg-kasten aktiv">' +
+                       (rnWegEingabe ? rnZiffernHTML(rnWegEingabe, laenge) : '') + '</span>';
+            }
+            return '<span class="rn-weg-kasten"></span>';
+        }
+        if (teil === '?') return '<span class="rn-weg-luecke"></span>';
+        if (typeof teil === 'number') return '<span>' + rnZiffernHTML(teil) + '</span>';
+        return '<span>' + teil + '</span>';
+    }).join('') + '</div>').join('');
+}
+
+/* Markierungen in der Aufgabe setzen. Ein Ziel ist ein ganzer Platz
+   ('b') oder eine Stelle darin ('a.einer'). */
+function rnMarkierungenSetzen() {
+    if (!rnCoachAn || !rnCoach) return;
+    const s = rnCoachAktuell();
+    const ziele = s.ziele ? (rnCoachBestaetigt ? s.ziele : rnCoachMarkiert) : [];
+    ziele.forEach(ziel => {
+        const teile = ziel.split('.');
+        const platz = document.querySelector('#rnAufgabe [data-platz="' + teile[0] + '"]');
+        if (!platz) return;
+        const el = teile[1] ? platz.querySelector('[data-stelle="' + teile[1] + '"]') : platz;
+        if (el) el.classList.add('rn-mark');
+    });
+}
+
+function rnMarkiere(event) {
+    if (!rnCoachWartetAufMarkierung() || answerLocked) return;
+    const platz = event.target.closest ? event.target.closest('[data-platz]') : null;
+    if (!platz) return;
+    const ziffer = event.target.closest('[data-stelle]');
+    const name = platz.dataset.platz;
+    const gewaehlt = ziffer ? name + '.' + ziffer.dataset.stelle : name;
+
+    /* Ist ein ganzer Platz gesucht, zählt auch ein Tipp auf eine seiner
+       Ziffern. Ist eine Stelle gesucht, muss es genau die sein. */
+    const s = rnCoachAktuell();
+    const treffer = s.ziele.find(ziel => ziel === gewaehlt || ziel === name);
+    if (!treffer) {
+        rnWackeln(ziffer || platz);
+        return;
+    }
+    if (rnCoachMarkiert.indexOf(treffer) < 0) rnCoachMarkiert.push(treffer);
+    if (rnCoachMarkiert.length >= s.ziele.length) {
+        rnCoachBestaetigt = true;
+        rnWeiterNachPause();
+    }
+    rnNeuZeichnen();
+}
+
+function rnWackeln(el) {
+    if (!el) return;
+    el.classList.add('rn-wackeln');
+    setTimeout(() => el.classList.remove('rn-wackeln'), 450);
+}
+
+/* Erledigt: kurz stehen lassen, dann stellt der Coach die nächste
+   Frage. Die Aufgabennummer verhindert, dass ein alter Timer in die
+   nächste Aufgabe hineinfunkt. */
+function rnWeiterNachPause() {
+    if (!rnCoach || rnCoachSchritt >= rnCoach.schritte.length - 1) return;
+    if (rnTimer) clearTimeout(rnTimer);
+    const beiSchritt = rnCoachSchritt, beiAufgabe = rnTask;
+    rnTimer = setTimeout(() => {
+        rnTimer = null;
+        if (!stationAktiv() || rnTask !== beiAufgabe || !rnCoachAn || rnCoachSchritt !== beiSchritt) return;
+        rnCoachWeiter();
+    }, 1500);
+}
+
+/* "Zeig es mir" erledigt den offenen Schritt für das Kind, "Weiter"
+   geht zum nächsten. Niemand bleibt hängen. */
+function rnCoachWeiter() {
+    if (!rnCoach) return;
+    if (rnTimer) { clearTimeout(rnTimer); rnTimer = null; }
+    const s = rnCoachAktuell();
+    if (!rnCoachSchrittFertig()) {
+        if (s.feld) { rnWeg[s.feld] = rnCoach.werte[s.feld]; rnWegEingabe = ''; }
+        if (s.ziele) { rnCoachMarkiert = s.ziele.slice(); rnCoachBestaetigt = true; }
+        rnNeuZeichnen();
+        return;
+    }
+    if (rnCoachSchritt < rnCoach.schritte.length - 1) {
+        rnCoachSchritt++;
+        rnCoachBestaetigt = false;
+        rnCoachMarkiert = [];
+        rnWegEingabe = '';
+    }
+    rnNeuZeichnen();
+}
+
+/* Zurück führt auf einen Schritt, der schon erledigt ist. */
+function rnCoachZurueck() {
+    if (!rnCoach || rnCoachSchritt === 0) return;
+    if (rnTimer) { clearTimeout(rnTimer); rnTimer = null; }
+    rnCoachSchritt--;
+    rnCoachBestaetigt = true;
+    rnWegEingabe = '';
+    rnNeuZeichnen();
+}
+
+function rnNeuZeichnen() {
+    rnZeichnen();
+    rnMarkierungenSetzen();
+}
+
+/* ---------- Ziffernblock ---------- */
+function rnTastenHTML() {
+    const gesperrt = rnGeloest ? ' disabled' : '';
+    let html = '<div class="tastenfeld rn-tastenfeld" id="rnTastenfeld">';
+    for (let i = 1; i <= 9; i++) {
+        html += '<button class="taste" onclick="rnTippe(\'' + i + '\')"' + gesperrt + '>' + i + '</button>';
+    }
+    html += '<button class="taste taste-loeschen" onclick="rnLoeschen()"' + gesperrt + '>←</button>';
+    html += '<button class="taste" onclick="rnTippe(\'0\')"' + gesperrt + '>0</button>';
+    return html + '</div>';
+}
+
+function rnTippe(ziffer) {
+    if (answerLocked || rnGeloest) return;
+    if (rnAktivesFeld()) { rnWegTippe(ziffer); return; }
+
+    /* Eine Null allein ist erlaubt (70 − 70 = 0), eine führende Null
+       vor weiteren Ziffern nicht. */
+    if (rnEingabe === '0') return;
+    if (rnEingabe.length >= 3) return;
+    const neu = rnEingabe + ziffer;
+    if (parseInt(neu, 10) > 100) return;   // Zahlenraum bis 100
+
+    rnEingabe = neu;
+    rnNeuZeichnen();
+    rnPruefknopfAktualisieren();
+
+    /* Steht die Zahl vollständig da, wird gleich geprüft - mit einer
+       kurzen Pause, damit die letzte Ziffer noch zu sehen ist. */
+    if (rnEingabe.length >= String(rnTask.soll).length) {
+        const getippt = rnEingabe, beiAufgabe = rnTask;
+        if (rnPruefTimer) clearTimeout(rnPruefTimer);
+        rnPruefTimer = setTimeout(() => {
+            rnPruefTimer = null;
+            if (answerLocked || rnTask !== beiAufgabe || rnEingabe !== getippt || !stationAktiv()) return;
+            rnPruefen();
+        }, 350);
+    }
+}
+
+function rnLoeschen() {
+    if (answerLocked || rnGeloest) return;
+    if (rnAktivesFeld()) rnWegEingabe = rnWegEingabe.slice(0, -1);
+    else rnEingabe = rnEingabe.slice(0, -1);
+    rnNeuZeichnen();
+    rnPruefknopfAktualisieren();
+}
+
+/* Eine Ziffer für das Kästchen im Rechenweg. Falsch kostet nichts:
+   das Kästchen wackelt und bleibt offen. */
+function rnWegTippe(ziffer) {
+    const name = rnAktivesFeld();
+    const soll = String(rnCoach.werte[name]);
+    if (rnWegEingabe === '' && ziffer === '0' && soll !== '0') {
+        rnWackeln(document.querySelector('.rn-weg-kasten.aktiv'));
+        return;
+    }
+    rnWegEingabe += ziffer;
+    if (rnWegEingabe.length < soll.length) {
+        rnNeuZeichnen();
+        return;
+    }
+    const eingabe = rnWegEingabe;
+    rnWegEingabe = '';
+    if (eingabe !== soll) {
+        rnNeuZeichnen();
+        rnWackeln(document.querySelector('.rn-weg-kasten.aktiv'));
+        return;
+    }
+    rnWeg[name] = Number(soll);
+    rnWeiterNachPause();
+    rnNeuZeichnen();
+}
+
+function rnPruefknopfAktualisieren() {
+    const btn = document.querySelector('#stationOptions .check-btn');
+    if (btn) btn.disabled = (rnEingabe === '' || !!rnGeloest);
+}
+
+function rnPruefen() {
+    if (answerLocked || rnGeloest || rnEingabe === '') return;
+    if (rnPruefTimer) { clearTimeout(rnPruefTimer); rnPruefTimer = null; }
+
+    const ok = parseInt(rnEingabe, 10) === rnTask.soll;
+    const typ = RN_TYPEN[rnKey];
+    if (!submitAnswer(ok, typ.hinweis(rnTask), false, typ.tipp ? typ.tipp(rnTask) : null)) {
+        /* Noch ein Versuch: die Eingabe wird geleert, alles andere -
+           auch ein offener Coach - bleibt, wie es ist. */
+        rnEingabe = '';
+        rnNeuZeichnen();
+        rnPruefknopfAktualisieren();
+        return;
+    }
+    rnTimerStoppen();
+    rnGeloest = { richtig: ok };
+    if (typ.kopfrechnen) krZaehlen(ok);
+    rnNeuZeichnen();
+    rnPruefknopfAktualisieren();
+}
+
+/* Am Rechner darf auch die Tastatur benutzt werden */
+function rnTastatur(e) {
+    if (!document.getElementById('rnTastenfeld') || answerLocked || !stationAktiv()) return;
+    if (e.key >= '0' && e.key <= '9') {
+        rnTippe(e.key);
+        e.preventDefault();
+    } else if (e.key === 'Backspace') {
+        rnLoeschen();
+        e.preventDefault();
+    } else if (e.key === 'Enter' && rnEingabe !== '' && !rnAktivesFeld()) {
+        rnPruefen();
+        e.preventDefault();
+    }
+}
+
+document.addEventListener('keydown', rnTastatur);
+
+/* ---------- Vorlesen von Sätzen ----------
+   Station 5 liest nur Zahlen vor und überwacht dafür die Sprachausgabe
+   genau. Hier genügt weniger: das Kind tippt selbst auf den Knopf, und
+   kommt kein Ton, ist der Text ja trotzdem zu lesen. */
+function vorleseKnopfHTML(aufruf) {
+    if (!spracheVerfuegbar()) return '';
+    return '<button type="button" class="rn-vorlesen" onclick="' + aufruf + '" ' +
+           'aria-label="Vorlesen" title="Vorlesen">🔊</button>';
+}
+
+function sprechbar(text) {
+    return text
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/−/g, ' minus ')
+        .replace(/\+/g, ' plus ')
+        .replace(/=/g, ' ist ')
+        .replace(/…\?/g, ' wie viel?')
+        .replace(/[✓➜]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function lesVorAus(id) {
+    const el = document.getElementById(id);
+    if (el) lesVor(el.innerHTML);
+}
+
+function lesVor(html) {
+    if (!spracheVerfuegbar()) return;
+    try {
+        if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+            window.speechSynthesis.cancel();
+        }
+        if (!s5Stimmen || !s5Stimmen.length) stimmenLaden();
+    } catch (e) { /* dann eben ohne Abbruch */ }
+
+    // Wie bei den Zahlen: nach cancel() in einem eigenen Schritt sprechen
+    setTimeout(() => {
+        try {
+            if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+            const text = new SpeechSynthesisUtterance(sprechbar(html));
+            text.lang = 'de-DE';
+            text.rate = 0.9;
+            const stimme = deutscheStimme();
+            if (stimme) text.voice = stimme;
+            s5Ansage = text;   // Referenz halten, sonst räumt Chrome sie weg
+            window.speechSynthesis.speak(text);
+        } catch (e) { /* ohne Ton bleibt der Text zu lesen */ }
+    }, 120);
+}
+
+/* ============================================
+   9d. Erkläraufgabe (Rechnen bis 100)
+   Aufbau wie in "Mathe Klasse 2": eine feste Beispielaufgabe, das Kind
+   beantwortet jeden Schritt selbst - es tippt eine Stelle an oder
+   wählt aus drei Antworten. Nach dem ersten Fehlversuch kommt ein
+   Tipp, nach dem zweiten löst sich der Schritt auf. Punkte gibt es
+   hier keine: die Erkläraufgabe soll zeigen, nicht prüfen.
+
+   Schema einer Variante (station.erklaerung ist eine Liste davon):
+   label     - Aufschrift auf dem Auswahlknopf, die Aufgabe selbst
+   aufgabe   - { a, op, b, luecke } für das Material
+   zeilen    - [{ teile, gesucht, folgt, ab }]
+               teile: Zahlen und Zeichen. Zahlen heißen der Reihe nach
+               a, b, c - die Zahl nach "=" heißt erg.
+               gesucht: { erg: 3 } - steht als "?" da, bis Schritt 3
+               erledigt ist. folgt: füllt sich mit, zeigt aber nie
+               ein "?" (es soll nur eine Frage zugleich sichtbar sein).
+               ab: die Zeile erscheint erst mit diesem Schritt.
+               zehner: die Zahlen der Zeile zählen Zehner (3 + 4 = 7
+               bei 30 + 40) - mit Farbhilfe werden sie ganz blau.
+   schritte  - [{ frage, pick | wahl + antwort, tipp, kurz, satz,
+                  zeigt, mitFrage }]
+               pick: Ziele zum Antippen wie im Coach ('a.zehner').
+               Ein Ziel mit Zeilennummer ('1:b') meint nur diese Zeile.
+               kurz: steht nach dem Schritt unter der Aufgabe,
+               satz: kommt in die Liste der erledigten Schritte.
+               zeigt: was danach leuchtet (sonst: die pick-Ziele).
+               mitFrage: zeigt leuchtet schon während der Frage.
+   strich    - erledigt => Sprünge am Rechenstrich (optional)
+   merksatz  - steht klein unter der Aufgabe
+   materialNachStelle - Stangen blau, Würfel grün, wie in der Übung
+   ============================================ */
+let erkStation = 0;
+let erkVariante = null;     // Index in station.erklaerung
+let erkSchritt = 0;         // 0 = Beispielansicht, danach 1 … n
+let erkFertig = false;      // ist der aktuelle Schritt beantwortet?
+let erkVersuche = 0;
+let erkGetroffen = [];
+let erkTipp = '';
+let erkSelbst = false;      // selbst gefunden oder aufgedeckt?
+let erkMaterial = false;
+let erkFarbe = false;
+let erkTimer = null;
+
+function erkTimerStoppen() {
+    if (erkTimer) { clearTimeout(erkTimer); erkTimer = null; }
+}
+
+/* Knopf über den Unterstationen - nur bei Stationen mit Erkläraufgabe */
+function erkEinstiegHTML(index) {
+    if (!STATIONS[index].erklaerung) return '';
+    return '<button class="check-btn ' + STATIONS[index].color +
+           '-color" onclick="openErklaerung(' + index + ')">📖 So geht\'s – Erkläraufgabe</button>';
+}
+
+function openErklaerung(index) {
+    erkStation = index;
+    const station = STATIONS[index];
+    const titel = document.getElementById('erkTitel');
+    titel.innerText = stationTitel(index);
+    titel.className = 'exercise-title ' + station.color + '-color';
+    document.getElementById('erkInhalt').style.setProperty('--rn-farbe', 'var(--color-' + station.color + ')');
+    document.getElementById('erkInhalt').style.setProperty('--hilfe-farbe', 'var(--color-' + station.color + ')');
+
+    /* Mit nur einer Variante gibt es nichts zu wählen */
+    erkVariante = station.erklaerung.length === 1 ? 0 : null;
+    erkNeuStart();
+    showScreen('erklaerScreen');
+}
+
+function backFromErklaerung() {
+    showSubStationScreen(erkStation);
+}
+
+function erkDaten() {
+    return erkVariante === null ? null : STATIONS[erkStation].erklaerung[erkVariante];
+}
+
+function erkNeuStart() {
+    erkTimerStoppen();
+    erkSchritt = 0;
+    erkFertig = false;
+    erkVersuche = 0;
+    erkGetroffen = [];
+    erkTipp = '';
+    erkSelbst = false;
+    erkMaterial = false;   // Hilfen auf Abruf: starten aus
+    erkFarbe = false;
+    erkZeichnen();
+}
+
+function erkVarianteWaehlen(i) {
+    erkVariante = i;
+    erkNeuStart();
+}
+
+function erkMaterialToggle() {
+    erkMaterial = !erkMaterial;
+    erkZeichnen();
+}
+
+function erkFarbeToggle() {
+    erkFarbe = !erkFarbe;
+    erkZeichnen();
+}
+
+/* Wie viele Schritte sind schon erledigt? */
+function erkErledigt() {
+    if (erkSchritt === 0) return 0;
+    return erkFertig ? erkSchritt : erkSchritt - 1;
+}
+
+function erkAktuell() {
+    const d = erkDaten();
+    return d && erkSchritt > 0 ? d.schritte[erkSchritt - 1] : null;
+}
+
+function erkZeichnen() {
+    const d = erkDaten();
+    const knopfMaterial = document.getElementById('erkMaterialBtn');
+    const knopfFarbe = document.getElementById('erkFarbeBtn');
+    const weiter = document.getElementById('erkWeiter');
+    const zurueck = document.getElementById('erkZurueck');
+
+    if (!d) {
+        /* Auswahl: auf den Knöpfen steht die Aufgabe selbst - das Kind
+           wählt etwas, das es sehen kann. */
+        document.getElementById('erkFortschritt').innerText = 'Was willst du anschauen?';
+        document.getElementById('erkBalken').style.width = '0%';
+        document.getElementById('erkBild').innerHTML = '';
+        document.getElementById('erkListe').innerHTML = '';
+        document.getElementById('erkAuswahl').innerHTML = '<div class="erk-wahl">' +
+            STATIONS[erkStation].erklaerung.map((v, i) =>
+                '<button class="erk-wahl-btn erk-variante" onclick="erkVarianteWaehlen(' + i + ')">' + v.label + '</button>'
+            ).join('') + '</div>';
+        knopfMaterial.hidden = true;
+        knopfFarbe.hidden = true;
+        zurueck.disabled = true;
+        weiter.hidden = true;
+        return;
+    }
+
+    const n = d.schritte.length;
+    /* Jeder Schritt zählt doppelt: Frage gelesen, Frage erledigt */
+    const halb = erkSchritt === 0 ? 0 : (erkSchritt - 1) * 2 + (erkFertig ? 2 : 1);
+    document.getElementById('erkFortschritt').innerText = erkSchritt === 0 ? 'Beispiel' : 'Schritt ' + erkSchritt + ' von ' + n;
+    document.getElementById('erkBalken').style.width = (halb / (n * 2) * 100) + '%';
+
+    knopfMaterial.hidden = false;
+    knopfMaterial.classList.toggle('aktiv', erkMaterial);
+    knopfMaterial.innerText = erkMaterial ? '🧱 Zehnerstangen ausblenden' : '🧱 Zehnerstangen zeigen';
+    knopfFarbe.hidden = false;
+    knopfFarbe.classList.toggle('aktiv', erkFarbe);
+    knopfFarbe.innerText = erkFarbe ? '🎨 Farben ausblenden' : '🎨 Farbliche Unterstützung';
+
+    erkBildZeichnen(d);
+    erkAuswahlZeichnen();
+    erkListeZeichnen(d);
+
+    /* Mit mehreren Varianten führt Zurück vom Beispiel wieder zur Wahl */
+    zurueck.disabled = erkSchritt === 0 && STATIONS[erkStation].erklaerung.length === 1;
+    weiter.hidden = false;
+    const fragt = erkSchritt > 0 && !erkFertig;
+    if (erkSchritt === 0) weiter.innerText = "Los geht's →";
+    else if (fragt) weiter.innerText = 'Zeig es mir';
+    else if (erkSchritt >= n) weiter.innerText = 'Von vorn ↺';
+    else weiter.innerText = 'Weiter →';
+    weiter.classList.toggle('is-secondary', fragt);
+}
+
+/* Namen der Plätze einer Zeile: a, b, c … und erg nach dem "=" */
+function erkPlatzNamen(teile) {
+    const namen = [];
+    let zaehler = 0, nachGleich = false;
+    teile.forEach(teil => {
+        if (teil === '=') { nachGleich = true; namen.push(null); return; }
+        if (typeof teil === 'number') {
+            namen.push(nachGleich ? 'erg' : 'abc'[zaehler++]);
+        } else {
+            namen.push(null);
+        }
+    });
+    return namen;
+}
+
+function erkBildZeichnen(d) {
+    const s = erkAktuell();
+    const erledigt = erkErledigt();
+    const tippen = !!(s && s.pick && !erkFertig);
+
+    /* Was leuchtet? Nach der Antwort das, was der Schritt zeigt. Bei
+       einer Auswahlfrage bleibt die Markierung des vorigen Schritts
+       stehen - bei "Wie viele sind es zusammen?" muss man sehen, was
+       gemeint ist. Vor einer Tipp-Frage wird gelöscht, sonst zeigte
+       die alte Markierung schon auf die Antwort. */
+    let leuchtet = [];
+    const zeigtVon = schritt => schritt ? [].concat(schritt.zeigt || schritt.pick || []) : [];
+    if (s && erkFertig) leuchtet = zeigtVon(s);
+    else if (s && s.mitFrage) leuchtet = zeigtVon(s);
+    else if (s && !s.pick && erkSchritt > 1) leuchtet = zeigtVon(d.schritte[erkSchritt - 2]);
+    if (tippen) leuchtet = leuchtet.concat(erkGetroffen);
+
+    const zeilen = d.zeilen.filter(z => erkSchritt >= (z.ab || 0));
+
+    /* Fragt gerade ein Platz? Dann ist er der einzige mit "?". */
+    const fragtGerade = (z, name) => !erkFertig && erkSchritt > 0 && z.gesucht && z.gesucht[name] === erkSchritt;
+    const jemandFragt = zeilen.some(z => z.gesucht && Object.keys(z.gesucht).some(name => fragtGerade(z, name)));
+
+    const gleichungen = zeilen.map((z, zi) => {
+        const namen = erkPlatzNamen(z.teile);
+        const istMarkiert = (name, stelle) => leuchtet.some(ziel => {
+            let zz = String(ziel);
+            const doppel = zz.indexOf(':');
+            if (doppel > 0) {
+                if (Number(zz.slice(0, doppel)) !== zi) return false;
+                zz = zz.slice(doppel + 1);
+            } else if (zi > 0) {
+                return false;   // ohne Zeilennummer ist die erste Zeile gemeint
+            }
+            return zz === name || (stelle && zz === name + '.' + stelle);
+        });
+
+        const fragtHier = Object.keys(z.gesucht || {}).some(name => fragtGerade(z, name));
+        const aktiv = zeilen.length > 1 && jemandFragt ? (fragtHier ? ' erk-zeile-aktiv' : ' erk-zeile-still') : '';
+
+        const html = z.teile.map((teil, ti) => {
+            const name = namen[ti];
+            if (!name) return '<span class="erk-zeichen">' + teil + '</span>';
+            const offenBis = (z.gesucht && z.gesucht[name]) || (z.folgt && z.folgt[name]);
+            const klick = tippen ? ' erk-tippbar" onclick="erkTippe(event, ' + zi + ')' : '';
+            const wert = ' data-platz="' + name + '"';
+
+            if (offenBis && erledigt < offenBis) {
+                /* Nur eine Frage zugleich: ein anderer offener Platz steht
+                   als Strich da, so wie die Lücke im Heft. */
+                const gesucht = z.gesucht && z.gesucht[name];
+                const zeigeFrage = gesucht && (!jemandFragt || fragtGerade(z, name));
+                return '<span class="erk-platz erk-offen' + (istMarkiert(name) ? ' rn-mark' : '') + klick + '"' + wert + '>' +
+                       (zeigeFrage ? '?' : '<span class="erk-luecke"></span>') + '</span>';
+            }
+            const ganz = istMarkiert(name);
+            const ziffern = rnStellen(teil).map(st =>
+                '<span class="rn-ziffer' + (!ganz && istMarkiert(name, st.stelle) ? ' rn-mark' : '') +
+                '" data-stelle="' + st.stelle + '">' + st.ziffer + '</span>').join('');
+            const gefunden = offenBis ? ' erk-gefunden' : '';
+            return '<span class="erk-platz' + gefunden + (ganz ? ' rn-mark' : '') + klick + '"' + wert + '>' + ziffern + '</span>';
+        }).join('');
+        return '<div class="erk-gleichung' + aktiv + (z.zehner ? ' rn-zehnerzeile' : '') + '">' + html + '</div>';
+    }).join('');
+
+    /* Genau eine Ansage unter der Aufgabe: die Frage, solange sie offen
+       ist - danach die kurze Rechnung als Bestätigung. */
+    let ansage;
+    if (erkSchritt === 0) {
+        ansage = '<span class="erk-ansage-intro">Schau dir die Aufgabe an. Dann gehst du Schritt für Schritt vor – und machst selbst mit.</span>';
+    } else if (!erkFertig) {
+        ansage = s.frage;
+    } else {
+        ansage = (erkSelbst ? '<span class="erk-haken">✓</span>' : '') +
+                 '<span class="erk-ansage-ergebnis">' + s.kurz + '</span>';
+    }
+
+    let html = '<div class="erk-gleichungen' + (erkFarbe ? ' rn-farbig' : '') + '">' + gleichungen + '</div>' +
+        '<div class="erk-ansage"><span id="erkAnsageText">' + ansage + '</span>' +
+        vorleseKnopfHTML("lesVorAus('erkAnsageText')") + '</div>';
+    if (d.strich) html += rnStrichHTML(d.strich(erledigt));
+    if (erkMaterial) html += rnMaterialHTML(d.aufgabe, erkFarbe || !!d.materialNachStelle);
+    html += '<small class="erk-merksatz">' + d.merksatz + '</small>';
+
+    document.getElementById('erkBild').innerHTML = html;
+}
+
+function erkAuswahlZeichnen() {
+    const box = document.getElementById('erkAuswahl');
+    const s = erkAktuell();
+    if (!s || erkFertig) { box.innerHTML = ''; return; }
+    const wahl = s.wahl
+        ? '<div class="erk-wahl">' + s.wahl.map((w, i) =>
+            '<button class="erk-wahl-btn" onclick="erkWahl(' + i + ', this)">' + w + '</button>').join('') + '</div>'
+        : '';
+    box.innerHTML = wahl + '<p class="erk-tipp' + (erkTipp ? ' falsch' : '') + '" id="erkTipp">' + erkTipp + '</p>';
+}
+
+/* In der Liste stehen nur die erledigten Schritte - was noch kommt,
+   bleibt verborgen, sonst liest das Kind die Lösung, bevor es selbst
+   gedacht hat. */
+function erkListeZeichnen(d) {
+    const zahl = erkErledigt();
+    document.getElementById('erkListe').innerHTML = d.schritte.slice(0, zahl).map((s, i) =>
+        '<div class="erk-schritt' + (i === zahl - 1 && erkFertig ? ' aktuell' : '') + '">' +
+        '<span>✓</span><p>' + s.satz + '</p></div>').join('');
+}
+
+function erkTippe(event, zeile) {
+    const s = erkAktuell();
+    if (!s || !s.pick || erkFertig) return;
+    const platz = event.currentTarget;
+    const ziffer = event.target.closest ? event.target.closest('[data-stelle]') : null;
+    const vorsatz = zeile > 0 ? zeile + ':' : '';
+    const name = vorsatz + platz.dataset.platz;
+    const gewaehlt = ziffer ? name + '.' + ziffer.dataset.stelle : name;
+
+    const treffer = s.pick.find(ziel => ziel === gewaehlt || ziel === name);
+    if (!treffer) { erkDaneben(ziffer || platz); return; }
+    if (erkGetroffen.indexOf(treffer) < 0) erkGetroffen.push(treffer);
+    if (erkGetroffen.length >= s.pick.length) erkGeloest(true);
+    else erkZeichnen();
+}
+
+function erkWahl(i, btn) {
+    const s = erkAktuell();
+    if (!s || erkFertig) return;
+    if (String(s.wahl[i]) === String(s.antwort)) { erkGeloest(true); return; }
+    btn.disabled = true;
+    erkDaneben(btn);
+}
+
+/* Nach dem ersten Fehlversuch ein Tipp, nach dem zweiten die Lösung -
+   Kinder sollen nicht vor einer verschlossenen Tür sitzen bleiben. */
+function erkDaneben(el) {
+    erkVersuche++;
+    rnWackeln(el);
+    if (erkVersuche >= 2) { erkGeloest(false); return; }
+    erkTipp = erkAktuell().tipp || 'Noch nicht ganz. Versuch es noch einmal.';
+    /* Nur den Tipp nachtragen - neu zeichnen nähme dem Knopf sein Wackeln */
+    const tipp = document.getElementById('erkTipp');
+    if (tipp) { tipp.innerText = erkTipp; tipp.classList.add('falsch'); }
+}
+
+/* Selbst gefunden: nach einem Moment zum Lesen geht es von allein
+   weiter. Aufgedeckt: das Kind liest und klickt selbst weiter. */
+function erkGeloest(selbst) {
+    erkTimerStoppen();
+    erkFertig = true;
+    erkSelbst = selbst;
+    erkVersuche = 0;
+    erkGetroffen = [];
+    erkTipp = '';
+    erkZeichnen();
+
+    /* Ein Daumen für den einzelnen Schritt, Konfetti erst für die
+       fertige Kette. Nur hier und nicht beim Zeichnen - sonst jubelte
+       die App bei jedem Umschalten des Materials erneut. */
+    const letzter = erkSchritt >= erkDaten().schritte.length;
+    if (selbst && letzter) startKonfetti(60);
+    else if (selbst) {
+        const daumen = document.createElement('span');
+        daumen.className = 'erk-daumen';
+        daumen.textContent = '👍';
+        document.getElementById('erkBild').appendChild(daumen);
+    }
+
+    if (!selbst || letzter) return;
+    const bei = erkSchritt;
+    erkTimer = setTimeout(() => {
+        erkTimer = null;
+        if (erkSchritt === bei && erkFertig) erkWeiter();
+    }, 1800);
+}
+
+function erkWeiter() {
+    erkTimerStoppen();
+    const d = erkDaten();
+    if (!d) return;
+    if (erkSchritt > 0 && !erkFertig) { erkGeloest(false); return; }
+    if (erkSchritt >= d.schritte.length) { erkNeuStart(); return; }
+    erkSchritt++;
+    erkFertig = false;
+    erkVersuche = 0;
+    erkGetroffen = [];
+    erkTipp = '';
+    erkSelbst = false;
+    erkZeichnen();
+}
+
+/* Zurück geht auf den vorigen, schon gelösten Schritt */
+function erkZurueck() {
+    erkTimerStoppen();
+    if (erkSchritt === 0) {
+        if (STATIONS[erkStation].erklaerung.length > 1) {
+            erkVariante = null;
+            erkZeichnen();
+        }
+        return;
+    }
+    erkSchritt--;
+    erkFertig = erkSchritt > 0;
+    erkVersuche = 0;
+    erkGetroffen = [];
+    erkTipp = '';
+    erkSelbst = false;
+    erkZeichnen();
+}
+
+/* ---------- Die Erkläraufgaben der sechs Stufen ---------- */
+/* Sprünge am Rechenstrich für die Erkläraufgaben. Jeder Sprung wird
+   sichtbar, sobald sein Schritt erledigt ist (bekannt: von Anfang an). */
+function erkStrich(spruenge) {
+    return erledigt => spruenge.map(s => {
+        const textDa = s.textAb === undefined || erledigt >= s.textAb;
+        const endeDa = s.endeAb === undefined || erledigt >= s.endeAb;
+        return { von: s.von, nach: s.nach, text: textDa ? s.text : '?', offen: !textDa,
+                 ende: endeDa ? s.nach : '?' };
+    });
+}
+
+const ERK_STUFE1 = [
+    {
+        label: '40 + 6',
+        aufgabe: { a: 40, op: '+', b: 6 },
+        zeilen: [{ teile: [40, '+', 6, '=', 46], gesucht: { erg: 3 } }],
+        schritte: [
+            { frage: 'Tippe die Zehner an.', pick: ['a.zehner'],
+              tipp: 'Die Zehner stehen vorne in der 40.',
+              kurz: '4 Zehner', satz: '40 sind 4 Zehner.' },
+            { frage: 'Tippe die Einer an, die dazukommen.', pick: ['b'],
+              tipp: 'Hinter dem Plus steht, was dazukommt.',
+              kurz: '6 Einer kommen dazu', satz: '6 Einer kommen dazu.' },
+            { frage: '4 Zehner und 6 Einer – welche Zahl ist das?', wahl: [64, 46, 10], antwort: 46,
+              tipp: 'Die Zehner stehen vorne, die Einer hinten.',
+              kurz: '40 + 6 = 46', satz: 'Zusammen: 40 + 6 = 46.', zeigt: ['erg'] }
+        ],
+        merksatz: 'Zehner und Einer zusammen ergeben die Zahl.'
+    },
+    {
+        label: '46 − 6',
+        aufgabe: { a: 46, op: '−', b: 6 },
+        zeilen: [{ teile: [46, '−', 6, '=', 40], gesucht: { erg: 3 } }],
+        schritte: [
+            { frage: 'Tippe die Einer der 46 an.', pick: ['a.einer'],
+              tipp: 'Die Einer stehen hinten in der Zahl.',
+              kurz: '6 Einer', satz: 'Die 46 hat 6 Einer.' },
+            { frage: 'Wie viele Einer gehen weg? Tippe sie an.', pick: ['b'],
+              tipp: 'Hinter dem Minus steht, was weggeht.',
+              kurz: '6 Einer gehen weg', satz: 'Alle 6 Einer gehen weg.' },
+            { frage: 'Was bleibt übrig?', wahl: [0, 40, 46], antwort: 40,
+              tipp: 'Die Einer sind weg. Nur die Zehner bleiben.',
+              kurz: '46 − 6 = 40', satz: 'Es bleiben die Zehner: 46 − 6 = 40.', zeigt: ['erg'] }
+        ],
+        merksatz: 'Gehen alle Einer weg, bleibt die Zehnerzahl.'
+    }
+];
+
+const ERK_STUFE2 = [
+    {
+        label: '30 + 40',
+        aufgabe: { a: 30, op: '+', b: 40 },
+        zeilen: [
+            { teile: [30, '+', 40, '=', 70], gesucht: { erg: 3 } },
+            { teile: [3, '+', 4, '=', 7], gesucht: { erg: 2 }, ab: 2, zehner: true }
+        ],
+        schritte: [
+            { frage: 'Tippe die Zehner von beiden Zahlen an.', pick: ['a.zehner', 'b.zehner'],
+              tipp: 'Die Zehner stehen vorne: in der 30 und in der 40.',
+              kurz: '3 Zehner und 4 Zehner', satz: '30 sind 3 Zehner, 40 sind 4 Zehner.' },
+            { frage: 'Rechne die kleine Aufgabe: 3 + 4.', wahl: [6, 7, 8], antwort: 7,
+              tipp: 'Zähle von 3 aus 4 weiter.',
+              kurz: '3 + 4 = 7', satz: 'Die kleine Aufgabe: 3 + 4 = 7.', zeigt: ['1:erg'] },
+            { frage: '7 Zehner – welche Zahl ist das?', wahl: [7, 70, 34], antwort: 70,
+              tipp: 'Aus 7 Zehnern wird die Zehnerzahl siebzig.',
+              kurz: '30 + 40 = 70', satz: '7 Zehner sind 70. Also: 30 + 40 = 70.', zeigt: ['erg', '1:erg'] }
+        ],
+        merksatz: 'Rechne mit den Zehnern wie mit Einern: 3 + 4 = 7, also 30 + 40 = 70.'
+    },
+    {
+        label: '70 − 20',
+        aufgabe: { a: 70, op: '−', b: 20 },
+        zeilen: [
+            { teile: [70, '−', 20, '=', 50], gesucht: { erg: 3 } },
+            { teile: [7, '−', 2, '=', 5], gesucht: { erg: 2 }, ab: 2, zehner: true }
+        ],
+        schritte: [
+            { frage: 'Tippe die Zehner von beiden Zahlen an.', pick: ['a.zehner', 'b.zehner'],
+              tipp: 'Die Zehner stehen vorne: in der 70 und in der 20.',
+              kurz: '7 Zehner und 2 Zehner', satz: '70 sind 7 Zehner, 20 sind 2 Zehner.' },
+            { frage: 'Rechne die kleine Aufgabe: 7 − 2.', wahl: [4, 5, 6], antwort: 5,
+              tipp: 'Zähle von 7 aus 2 zurück.',
+              kurz: '7 − 2 = 5', satz: 'Die kleine Aufgabe: 7 − 2 = 5.', zeigt: ['1:erg'] },
+            { frage: '5 Zehner – welche Zahl ist das?', wahl: [5, 50, 90], antwort: 50,
+              tipp: 'Aus 5 Zehnern wird die Zehnerzahl fünfzig.',
+              kurz: '70 − 20 = 50', satz: '5 Zehner sind 50. Also: 70 − 20 = 50.', zeigt: ['erg', '1:erg'] }
+        ],
+        merksatz: 'Rechne mit den Zehnern wie mit Einern: 7 − 2 = 5, also 70 − 20 = 50.'
+    }
+];
+
+const ERK_STUFE3 = [
+    {
+        label: '45 + 30',
+        materialNachStelle: true,
+        aufgabe: { a: 45, op: '+', b: 30 },
+        zeilen: [{ teile: [45, '+', 30, '=', 75], gesucht: { erg: 4 } }],
+        schritte: [
+            { frage: 'Tippe die Zehner von beiden Zahlen an.', pick: ['a.zehner', 'b.zehner'],
+              tipp: 'Die Zehner stehen vorne: in der 45 und in der 30.',
+              kurz: '4 Zehner und 3 Zehner', satz: '45 hat 4 Zehner. 3 Zehner kommen dazu.' },
+            { frage: 'Wie viele Zehner sind es zusammen?', wahl: [6, 7, 8], antwort: 7,
+              tipp: 'Rechne 4 + 3.',
+              kurz: '4 + 3 = 7 Zehner', satz: 'Zusammen sind es 7 Zehner.', zeigt: ['a.zehner', 'b.zehner'] },
+            { frage: 'Tippe die Einer der 45 an.', pick: ['a.einer'],
+              tipp: 'Die Einer stehen hinten in der 45.',
+              kurz: 'die 5 Einer bleiben', satz: 'Die 5 Einer bleiben gleich.' },
+            { frage: 'Wie heißt das Ergebnis?', wahl: [48, 75, 85], antwort: 75,
+              tipp: '7 Zehner und 5 Einer.',
+              kurz: '45 + 30 = 75', satz: '7 Zehner und 5 Einer: 45 + 30 = 75.', zeigt: ['erg'] }
+        ],
+        merksatz: 'Nur die Zehner rechnen. Die Einer bleiben.'
+    },
+    {
+        label: '40 + 26',
+        materialNachStelle: true,
+        aufgabe: { a: 40, op: '+', b: 26 },
+        zeilen: [{ teile: [40, '+', 26, '=', 66], gesucht: { erg: 4 } }],
+        schritte: [
+            { frage: 'Tippe die Zehner von beiden Zahlen an.', pick: ['a.zehner', 'b.zehner'],
+              tipp: 'Die Zehner stehen vorne: in der 40 und in der 26.',
+              kurz: '4 Zehner und 2 Zehner', satz: '40 hat 4 Zehner, 26 hat 2 Zehner.' },
+            { frage: 'Wie viele Zehner sind es zusammen?', wahl: [5, 6, 7], antwort: 6,
+              tipp: 'Rechne 4 + 2.',
+              kurz: '4 + 2 = 6 Zehner', satz: 'Zusammen sind es 6 Zehner.', zeigt: ['a.zehner', 'b.zehner'] },
+            { frage: 'Tippe die Einer der 26 an.', pick: ['b.einer'],
+              tipp: 'Die Einer stehen hinten in der 26.',
+              kurz: 'die 6 Einer bleiben', satz: 'Die 6 Einer bleiben gleich.' },
+            { frage: 'Wie heißt das Ergebnis?', wahl: [46, 60, 66], antwort: 66,
+              tipp: '6 Zehner und 6 Einer.',
+              kurz: '40 + 26 = 66', satz: '6 Zehner und 6 Einer: 40 + 26 = 66.', zeigt: ['erg'] }
+        ],
+        merksatz: 'Nur die Zehner rechnen. Die Einer bleiben.'
+    },
+    {
+        label: '65 − 20',
+        aufgabe: { a: 65, op: '−', b: 20 },
+        zeilen: [{ teile: [65, '−', 20, '=', 45], gesucht: { erg: 4 } }],
+        schritte: [
+            { frage: 'Tippe die Zehner von beiden Zahlen an.', pick: ['a.zehner', 'b.zehner'],
+              tipp: 'Die Zehner stehen vorne: in der 65 und in der 20.',
+              kurz: '6 Zehner und 2 Zehner', satz: '65 hat 6 Zehner. 2 Zehner gehen weg.' },
+            { frage: 'Wie viele Zehner bleiben?', wahl: [3, 4, 5], antwort: 4,
+              tipp: 'Rechne 6 − 2.',
+              kurz: '6 − 2 = 4 Zehner', satz: 'Es bleiben 4 Zehner.', zeigt: ['a.zehner', 'b.zehner'] },
+            { frage: 'Tippe die Einer der 65 an.', pick: ['a.einer'],
+              tipp: 'Die Einer stehen hinten in der 65.',
+              kurz: 'die 5 Einer bleiben', satz: 'Die 5 Einer bleiben gleich.' },
+            { frage: 'Wie heißt das Ergebnis?', wahl: [40, 45, 63], antwort: 45,
+              tipp: '4 Zehner und 5 Einer.',
+              kurz: '65 − 20 = 45', satz: '4 Zehner und 5 Einer: 65 − 20 = 45.', zeigt: ['erg'] }
+        ],
+        merksatz: 'Nur die Zehner gehen weg. Die Einer bleiben.'
+    }
+];
+
+const ERK_STUFE4 = [
+    {
+        label: '34 + 5',
+        aufgabe: { a: 34, op: '+', b: 5 },
+        zeilen: [
+            { teile: [34, '+', 5, '=', 39], gesucht: { erg: 4 } },
+            { teile: [4, '+', 5, '=', 9], gesucht: { erg: 2 }, ab: 2 }
+        ],
+        schritte: [
+            { frage: 'Tippe die Einer von beiden Zahlen an.', pick: ['a.einer', 'b'],
+              tipp: 'Die Einer stehen hinten. Die 5 hat nur Einer.',
+              kurz: '4 Einer und 5 Einer', satz: 'Die 34 hat 4 Einer, 5 Einer kommen dazu.' },
+            { frage: 'Der Zehner wartet. Rechne nur die Einer: 4 + 5.', wahl: [8, 9, 10], antwort: 9,
+              tipp: 'Zähle von 4 aus 5 weiter.',
+              kurz: '4 + 5 = 9', satz: 'Die Einer: 4 + 5 = 9.', zeigt: ['1:erg'] },
+            { frage: 'Tippe den Zehner an, der gewartet hat.', pick: ['a.zehner'],
+              tipp: 'Der Zehner steht vorne in der 34.',
+              kurz: 'die 3 Zehner bleiben', satz: 'Die 3 Zehner bleiben.' },
+            { frage: 'Wie heißt das Ergebnis?', wahl: [39, 84, 93], antwort: 39,
+              tipp: '3 Zehner und 9 Einer.',
+              kurz: '34 + 5 = 39', satz: '3 Zehner und 9 Einer: 34 + 5 = 39.', zeigt: ['erg'] }
+        ],
+        merksatz: 'Der Zehner wartet. Nur die Einer rechnen.'
+    },
+    {
+        label: '38 − 5',
+        aufgabe: { a: 38, op: '−', b: 5 },
+        zeilen: [
+            { teile: [38, '−', 5, '=', 33], gesucht: { erg: 4 } },
+            { teile: [8, '−', 5, '=', 3], gesucht: { erg: 2 }, ab: 2 }
+        ],
+        schritte: [
+            { frage: 'Tippe die Einer der 38 an – und die Einer, die weggehen.', pick: ['a.einer', 'b'],
+              tipp: 'Die Einer stehen hinten. Die 5 hat nur Einer.',
+              kurz: '8 Einer, 5 gehen weg', satz: 'Die 38 hat 8 Einer, 5 Einer gehen weg.' },
+            { frage: 'Der Zehner wartet. Rechne nur die Einer: 8 − 5.', wahl: [2, 3, 4], antwort: 3,
+              tipp: 'Zähle von 8 aus 5 zurück.',
+              kurz: '8 − 5 = 3', satz: 'Die Einer: 8 − 5 = 3.', zeigt: ['1:erg'] },
+            { frage: 'Tippe den Zehner an, der gewartet hat.', pick: ['a.zehner'],
+              tipp: 'Der Zehner steht vorne in der 38.',
+              kurz: 'die 3 Zehner bleiben', satz: 'Die 3 Zehner bleiben.' },
+            { frage: 'Wie heißt das Ergebnis?', wahl: [32, 33, 43], antwort: 33,
+              tipp: '3 Zehner und 3 Einer.',
+              kurz: '38 − 5 = 33', satz: '3 Zehner und 3 Einer: 38 − 5 = 33.', zeigt: ['erg'] }
+        ],
+        merksatz: 'Der Zehner wartet. Nur die Einer rechnen.'
+    }
+];
+
+const ERK_STUFE5 = [
+    {
+        label: '37 + 3',
+        aufgabe: { a: 37, op: '+', b: 3 },
+        zeilen: [
+            { teile: [37, '+', 3, '=', 40], gesucht: { erg: 4 } },
+            { teile: [7, '+', 3, '=', 10], gesucht: { erg: 3 }, ab: 3 }
+        ],
+        schritte: [
+            { frage: 'Tippe die Einer der 37 an.', pick: ['a.einer'],
+              tipp: 'Die Einer stehen hinten in der 37.',
+              kurz: '7 Einer', satz: 'Die 37 hat 7 Einer.' },
+            { frage: 'Tippe an, was dazukommt.', pick: ['b'],
+              tipp: 'Hinter dem Plus steht, was dazukommt.',
+              kurz: '3 Einer kommen dazu', satz: '3 Einer kommen dazu.' },
+            { frage: 'Wie viel sind 7 Einer und 3 Einer?', wahl: [9, 10, 11], antwort: 10,
+              tipp: 'Zähle von 7 aus 3 weiter: 8, 9, …',
+              kurz: '7 + 3 = 10', satz: '7 + 3 = 10 – ein neuer Zehner ist voll.', zeigt: ['1:erg'] },
+            { frage: 'Jetzt sind es 4 Zehner. Wie heißt das Ergebnis?', wahl: [30, 40, 41], antwort: 40,
+              tipp: '3 Zehner und noch ein voller Zehner.',
+              kurz: '37 + 3 = 40', satz: 'Du landest genau beim Zehner: 37 + 3 = 40.', zeigt: ['erg'] }
+        ],
+        strich: erkStrich([{ von: 37, nach: 40, text: '+3', endeAb: 4 }]),
+        merksatz: 'Machst du die Einer zur 10 voll, landest du genau beim nächsten Zehner.'
+    },
+    {
+        label: '37 + _ = 40',
+        aufgabe: { a: 37, op: '+', b: 3, luecke: 'b' },
+        zeilen: [{ teile: [37, '+', 3, '=', 40], gesucht: { b: 3 } }],
+        schritte: [
+            { frage: 'Tippe die Zahl an, bei der du startest.', pick: ['a'],
+              tipp: 'Du startest vorne, vor dem Plus.',
+              kurz: 'Start: 37', satz: 'Du startest bei 37.' },
+            { frage: 'Tippe die Zahl an, zu der du willst.', pick: ['erg'],
+              tipp: 'Das Ziel steht hinter dem Gleichheitszeichen.',
+              kurz: 'Ziel: 40', satz: 'Du willst zur 40.' },
+            { frage: 'Wie viele fehlen von 37 bis 40? Zähle: 38, 39, 40.', wahl: [2, 3, 4], antwort: 3,
+              tipp: 'Schau auf die Einer: von 7 bis 10.',
+              kurz: '37 + 3 = 40', satz: 'Es fehlen 3. 37 + 3 = 40.', zeigt: ['b'] }
+        ],
+        strich: erkStrich([{ von: 37, nach: 40, text: '+3', textAb: 3 }]),
+        merksatz: 'Schau auf die Einer: von 7 bis 10 fehlen 3.'
+    },
+    {
+        label: '40 − 6',
+        aufgabe: { a: 40, op: '−', b: 6 },
+        zeilen: [
+            { teile: [40, '−', 6, '=', 34], gesucht: { erg: 4 } },
+            { teile: [10, '−', 6, '=', 4], gesucht: { erg: 2 }, ab: 2 }
+        ],
+        schritte: [
+            { frage: 'Tippe die Zehner der 40 an.', pick: ['a.zehner'],
+              tipp: 'Die Zehner stehen vorne in der 40.',
+              kurz: '4 Zehner, keine Einer', satz: '40 sind 4 Zehner. Einer sind keine da.' },
+            { frage: 'Ein Zehner wird aufgemacht. Wie viele bleiben von ihm, wenn 6 weggehen?', wahl: [3, 4, 5], antwort: 4,
+              tipp: 'Rechne 10 − 6.',
+              kurz: '10 − 6 = 4', satz: 'Ein Zehner wird aufgemacht: 10 − 6 = 4.', zeigt: ['1:erg'] },
+            { frage: 'Wie viele Zehner bleiben ganz?', wahl: [2, 3, 4], antwort: 3,
+              tipp: 'Einen der 4 Zehner hast du aufgemacht.',
+              kurz: '3 Zehner bleiben ganz', satz: 'Die anderen 3 Zehner bleiben ganz.', zeigt: ['a.zehner'] },
+            { frage: 'Wie heißt das Ergebnis?', wahl: [34, 36, 46], antwort: 34,
+              tipp: '3 Zehner und 4 Einer.',
+              kurz: '40 − 6 = 34', satz: '3 Zehner und 4 Einer: 40 − 6 = 34.', zeigt: ['erg'] }
+        ],
+        strich: erkStrich([{ von: 40, nach: 34, text: '−6', endeAb: 4 }]),
+        merksatz: 'Ein Zehner wird aufgemacht: 10 − 6 = 4. Die anderen Zehner bleiben.'
+    }
+];
+
+const ERK_STUFE6 = [
+    {
+        label: '37 + 5',
+        aufgabe: { a: 37, op: '+', b: 5 },
+        zeilen: [
+            { teile: [37, '+', 5, '=', 42], gesucht: { erg: 3 } },
+            { teile: [37, '+', 3, '+', 2, '=', 42], gesucht: { b: 1, c: 2 }, folgt: { erg: 3 }, ab: 1 }
+        ],
+        schritte: [
+            { frage: 'Wie viele fehlen von 37 bis zum nächsten Zehner?', wahl: [2, 3, 4], antwort: 3,
+              tipp: 'Zähle: 38, 39, 40.',
+              kurz: '37 + 3 = 40', satz: 'Bis zur 40 fehlen 3.', zeigt: ['1:a', '1:b'] },
+            { frage: 'Die 5 ist 3 und …?', wahl: [1, 2, 3], antwort: 2,
+              tipp: 'Wie viel fehlt von 3 bis 5?',
+              kurz: 'die 5 ist 3 und 2', satz: 'Die 5 zerlegst du in 3 und 2.',
+              zeigt: ['b', '1:b', '1:c'], mitFrage: true },
+            { frage: 'Rechne weiter: 40 + 2.', wahl: [32, 42, 43], antwort: 42,
+              tipp: 'Von der 40 aus noch 2 weiter.',
+              kurz: '40 + 2 = 42', satz: 'Dann der Rest: 40 + 2 = 42. Also 37 + 5 = 42.', zeigt: ['erg', '1:erg'] }
+        ],
+        strich: erkStrich([
+            { von: 37, nach: 40, text: '+3', textAb: 1 },
+            { von: 40, nach: 42, text: '+2', textAb: 2, endeAb: 3 }
+        ]),
+        merksatz: 'Erst bis zum Zehner, dann den Rest.'
+    },
+    {
+        label: '42 − 5',
+        aufgabe: { a: 42, op: '−', b: 5 },
+        zeilen: [
+            { teile: [42, '−', 5, '=', 37], gesucht: { erg: 3 } },
+            { teile: [42, '−', 2, '−', 3, '=', 37], gesucht: { b: 1, c: 2 }, folgt: { erg: 3 }, ab: 1 }
+        ],
+        schritte: [
+            { frage: 'Wie viele gehen von 42 zurück bis zur 40?', wahl: [1, 2, 3], antwort: 2,
+              tipp: 'Zähle zurück: 41, 40.',
+              kurz: '42 − 2 = 40', satz: 'Bis zur 40 sind es 2 zurück.', zeigt: ['1:a', '1:b'] },
+            { frage: 'Die 5 ist 2 und …?', wahl: [2, 3, 4], antwort: 3,
+              tipp: 'Wie viel fehlt von 2 bis 5?',
+              kurz: 'die 5 ist 2 und 3', satz: 'Die 5 zerlegst du in 2 und 3.',
+              zeigt: ['b', '1:b', '1:c'], mitFrage: true },
+            { frage: 'Rechne weiter: 40 − 3.', wahl: [33, 37, 47], antwort: 37,
+              tipp: 'Von der 40 aus noch 3 zurück.',
+              kurz: '40 − 3 = 37', satz: 'Dann der Rest: 40 − 3 = 37. Also 42 − 5 = 37.', zeigt: ['erg', '1:erg'] }
+        ],
+        strich: erkStrich([
+            { von: 42, nach: 40, text: '−2', textAb: 1 },
+            { von: 40, nach: 37, text: '−3', textAb: 2, endeAb: 3 }
+        ]),
+        merksatz: 'Erst zurück bis zum Zehner, dann den Rest.'
+    }
+];
+
+/* ============================================
+   9e. Kopfrechnen (Wiederholung Klasse 1)
+   Nachbau des Kopfrechentrainers aus "Mathe Klasse 2": das kleine
+   Einspluseins im Zahlenraum bis 20, vier Rechenarten und "Gemischt".
+   Die Übung läuft mit derselben Technik wie "Rechnen bis 100"
+   (Ziffernblock, keine Aufgabe zweimal hintereinander). Statt der
+   Anschauungshilfen gibt es hier nur den Spickzettel und nach dem
+   ersten Fehler einen Tipp - Kopfrechnen soll ja das schnelle,
+   auswendige Rechnen festigen.
+   ============================================ */
+
+/* Alle Aufgaben einer Rechenart. Eine "Reihe" ordnet den Spickzettel:
+   beim Plus die erste Zahl (7 + …), beim Minus die abgezogene (… − 7). */
+const KR_MODI = {
+    plus:      { name: '1+1',  reihe: r => r + ' + …' },
+    minus:     { name: '1−1',  reihe: r => '… − ' + r },
+    plusZue:   { name: '1+1 mit Zehnerübergang', reihe: r => r + ' + …' },
+    minusZue:  { name: '1−1 mit Zehnerübergang', reihe: r => '… − ' + r }
+};
+
+function krAlleAufgaben(modus) {
+    const liste = [];
+    const dazu = (a, op, b, reihe) => liste.push({ a: a, op: op, b: b, reihe: reihe, modus: modus });
+    if (modus === 'plus') {
+        // Summe höchstens 10: kein Zehnerübergang
+        for (let a = 1; a <= 9; a++) for (let b = 1; b <= 10 - a; b++) dazu(a, '+', b, a);
+    } else if (modus === 'minus') {
+        // Von höchstens 10 aus, das Ergebnis ist mindestens 1
+        for (let b = 1; b <= 9; b++) for (let a = b + 1; a <= 10; a++) dazu(a, '−', b, b);
+    } else if (modus === 'plusZue') {
+        // Beide Zahlen höchstens 9 - mit einer 10 wird kein Zehner überschritten
+        for (let a = 2; a <= 9; a++) for (let b = 11 - a; b <= 9; b++) dazu(a, '+', b, a);
+    } else if (modus === 'minusZue') {
+        // Von 11 bis 18 zurück unter die 10: 12 − 7 = 5
+        for (let b = 2; b <= 9; b++) for (let a = 11; a <= b + 9; a++) dazu(a, '−', b, b);
+    }
+    return liste;
+}
+
+/* Tipp nach dem ersten Fehlversuch - wörtlich aus "Mathe Klasse 2" */
+function krTipp(t) {
+    if (t.modus === 'plus') return 'Tipp: Zähle von ' + t.a + ' aus ' + t.b + ' Schritte weiter.';
+    if (t.modus === 'minus') return 'Tipp: Wie viel musst du zu ' + t.b + ' dazuzählen, um auf ' + t.a + ' zu kommen?';
+    if (t.modus === 'plusZue') {
+        const bisZehn = 10 - t.a;
+        return 'Tipp: Von ' + t.a + ' bis 10 fehlen ' + bisZehn + '. Zerlege die ' + t.b + ' in ' +
+               bisZehn + ' und ' + (t.b - bisZehn) + '.';
+    }
+    const abZehn = t.a - 10;
+    return 'Tipp: Gehe erst von ' + t.a + ' auf 10 zurück (das sind ' + abZehn + '). Dann ziehe noch ' +
+           (t.b - abZehn) + ' ab.';
+}
+
+function krTyp(modi) {
+    return {
+        kopfrechnen: true,
+        anweisung: 'Rechne im Kopf. Tippe das Ergebnis ein.',
+        neu: () => pick(krAlleAufgaben(pick(modi))),
+        tipp: t => krTipp(t),
+        hinweis: t => 'Richtig ist: ' + t.a + ' ' + t.op + ' ' + t.b + ' = ' + t.erg + '.'
+    };
+}
+
+RN_TYPEN.krPlus = krTyp(['plus']);
+RN_TYPEN.krMinus = krTyp(['minus']);
+RN_TYPEN.krPlusZue = krTyp(['plusZue']);
+RN_TYPEN.krMinusZue = krTyp(['minusZue']);
+RN_TYPEN.krGemischt = krTyp(['plus', 'minus', 'plusZue', 'minusZue']);
+
+/* ---------- Auswertung der Runde ---------- */
+let krRunde = { richtig: 0, gesamt: 0, mitSpick: 0, ohneSpick: 0 };
+
+function krRundeZuruecksetzen() {
+    krRunde = { richtig: 0, gesamt: 0, mitSpick: 0, ohneSpick: 0 };
+}
+
+/* Gezählt wird jede abgeschlossene Aufgabe - richtig gelöst oder nach
+   dem zweiten Fehlversuch aufgelöst. */
+function krZaehlen(richtig) {
+    krRunde.gesamt++;
+    if (!richtig) return;
+    krRunde.richtig++;
+    if (rnTask.spick) krRunde.mitSpick++;
+    else krRunde.ohneSpick++;
+}
+
+/* Sterne und Lob nach der Trefferquote, wie in "Mathe Klasse 2" */
+function krAuswertungHTML() {
+    const r = krRunde;
+    if (r.gesamt === 0) return '';
+    const quote = r.richtig / r.gesamt * 100;
+    let sterne = 1, lob = 'Übe fleißig weiter, du schaffst das! 💪';
+    if (quote >= 95) { sterne = 5; lob = 'Unglaublich! Du bist ein Mathe-Profi! 🏆'; }
+    else if (quote >= 80) { sterne = 4; lob = 'Super! Das hast du spitze gemacht! ✨'; }
+    else if (quote >= 60) { sterne = 3; lob = 'Prima! Eine tolle Leistung! ⭐'; }
+    else if (quote >= 40) { sterne = 2; lob = 'Das war schon gut! Übe fleißig weiter!'; }
+    return '<div class="kr-auswertung">' +
+           '<p class="kr-lob">' + lob + '</p>' +
+           '<p class="kr-quote">Du hast <strong>' + r.richtig + '</strong> von <strong>' + r.gesamt +
+           '</strong> richtig gelöst!</p>' +
+           '<div class="kr-details"><span>🧠 Ohne Spickzettel: <strong>' + r.ohneSpick + '</strong></span>' +
+           '<span>📋 Mit Spickzettel: <strong>' + r.mitSpick + '</strong></span></div>' +
+           '<div class="kr-sterne">' + '⭐'.repeat(sterne) + '☆'.repeat(5 - sterne) + '</div></div>';
+}
+
+/* ---------- Spickzettel ---------- */
+function krHilfenHTML() {
+    return '<div class="hilfe-bereich" style="--hilfe-farbe: ' + rnFarbe() + ';">' +
+           '<button class="hilfe-btn" onclick="krSpickzettelOeffnen()">📋 Spickzettel</button></div>';
+}
+
+/* Der Spickzettel zeigt alle Aufgaben der Rechenart, nach Reihen
+   geordnet. Bei "Gemischt" ist es die Rechenart der aktuellen Aufgabe -
+   alle vier zusammen wären zu viel zum Nachschauen. */
+function krSpickzettelOeffnen() {
+    if (!rnTask || answerLocked) return;
+    rnTask.spick = true;   // zählt als "mit Spickzettel"
+
+    const modus = rnTask.modus;
+    const reihen = {};
+    krAlleAufgaben(modus).forEach(t => {
+        (reihen[t.reihe] = reihen[t.reihe] || []).push(t);
+    });
+    const html = Object.keys(reihen).map(Number).sort((x, y) => x - y).map(r =>
+        '<div class="kr-spick-reihe"><div class="kr-spick-label">' + KR_MODI[modus].reihe(r) + '</div>' +
+        '<div class="kr-spick-zellen">' + reihen[r].map(t =>
+            '<span class="kr-spick-zelle">' + t.a + ' ' + t.op + ' ' + t.b + ' = <strong>' +
+            (t.op === '+' ? t.a + t.b : t.a - t.b) + '</strong></span>').join('') +
+        '</div></div>').join('');
+
+    document.getElementById('spickTitel').innerText = 'Spickzettel: ' + KR_MODI[modus].name + ' 📋';
+    document.getElementById('spickInhalt').innerHTML = html;
+    const overlay = document.getElementById('spickzettel');
+    overlay.style.setProperty('--spick-farbe', rnFarbe());
+    overlay.hidden = false;
+}
+
+function krSpickzettelSchliessen() {
+    const overlay = document.getElementById('spickzettel');
+    if (overlay) overlay.hidden = true;
+}
+
+/* Escape schließt den Spickzettel */
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') krSpickzettelSchliessen();
+});
+
+/* ============================================
+   9f. Arbeitsblatt (Rechnen bis 100)
+   Ein Blatt zum Ausdrucken: 20 Aufgaben einer Aufgabenart oder
+   gemischt aus der ganzen Stufe, auf Seite 2 die Lösungen. Die
+   Aufgaben entstehen mit denselben Regeln wie in der Übung, jedes Mal
+   neu. Schwarz-weiß und ohne Bilder, damit es auf jedem Drucker gut
+   aussieht.
+   ============================================ */
+const AB_ANZAHL = 20;
+
+/* Der Knopf über den Unterstationen - nur bei Stationen mit Arbeitsblatt */
+function abEinstiegHTML(index) {
+    if (!STATIONS[index].arbeitsblatt) return '';
+    return '<button class="check-btn ' + STATIONS[index].color + '-color" onclick="abAuswahlToggle(' + index + ')">' +
+           '🖨️ Arbeitsblatt drucken</button>';
+}
+
+/* Vor dem Drucken: welche Aufgabenart soll aufs Blatt? */
+function abAuswahlToggle(index) {
+    const box = document.getElementById('abAuswahl');
+    if (box.innerHTML) { box.innerHTML = ''; return; }
+    const station = STATIONS[index];
+    const knopf = (sub, text) =>
+        '<button class="hilfe-btn" onclick="abDrucken(' + index + ', ' + sub + ')">' + text + '</button>';
+    box.innerHTML = '<div class="ab-auswahl" style="--hilfe-farbe: var(--color-' + station.color + ');">' +
+        '<p>Welche Aufgaben sollen auf das Blatt?</p><div class="hilfe-tasten">' +
+        station.subStations.map((sub, i) => knopf(i, sub.name)).join('') +
+        knopf(-1, '🔀 Gemischt') + '</div></div>';
+}
+
+/* 20 verschiedene Aufgaben. Gemischt wechseln sich die Aufgabenarten
+   reihum ab, damit jede gleich oft vorkommt. Doppelt gibt es keine -
+   auch nicht als Tauschaufgabe. */
+function abAufgaben(index, sub) {
+    const station = STATIONS[index];
+    const typen = sub === -1 ? station.subStations.map(s => s.typ) : [station.subStations[sub].typ];
+    const reihum = shuffle(typen);
+    const schon = new Set();
+    const liste = [];
+    let guard = 0;
+    while (liste.length < AB_ANZAHL && guard++ < 5000) {
+        const key = reihum[liste.length % reihum.length];
+        const t = RN_TYPEN[key].neu();
+        if (schon.has(rnSchluessel(t))) continue;
+        schon.add(rnSchluessel(t));
+        t.erg = t.op === '+' ? t.a + t.b : t.a - t.b;
+        t.luecke = t.luecke || 'erg';
+        liste.push(t);
+    }
+    return liste;
+}
+
+/* Eine Aufgabe als Zeile. mitLoesung: die Lücke ist ausgefüllt. */
+function abZeileHTML(t, nr, mitLoesung) {
+    const luecke = wert => mitLoesung ? '<b>' + wert + '</b>' : '<span class="linie"></span>';
+    const b = t.luecke === 'b' ? luecke(t.b) : t.b;
+    const erg = t.luecke === 'erg' ? luecke(t.erg) : t.erg;
+    return '<div class="aufgabe"><span class="nr">' + nr + ')</span> ' +
+           t.a + ' ' + t.op + ' ' + b + ' = ' + erg + '</div>';
+}
+
+function abDokumentHTML(titel, untertitel, aufgaben) {
+    const spalten = mitLoesung => '<div class="raster">' +
+        aufgaben.map((t, i) => abZeileHTML(t, i + 1, mitLoesung)).join('') + '</div>';
+    return '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>Arbeitsblatt ' + titel + '</title>' +
+        '<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">' +
+        '<style>' +
+        '@page { size: A4; margin: 16mm 18mm; }' +
+        'body { font-family: Outfit, Arial, sans-serif; color: #000; margin: 0; }' +
+        '.kopf { font-size: 11pt; color: #444; }' +
+        'h1 { font-size: 20pt; margin: 4px 0 2px; }' +
+        'h2 { font-size: 14pt; font-weight: 600; margin: 0 0 14px; }' +
+        '.name { display: flex; gap: 30px; font-size: 12pt; margin-bottom: 22px; }' +
+        '.name span { flex: 1; border-bottom: 1px solid #000; padding-bottom: 2px; }' +
+        '.name span.datum { flex: 0 0 35%; }' +
+        '.raster { display: grid; grid-template-columns: 1fr 1fr; grid-auto-flow: column; ' +
+        'grid-template-rows: repeat(' + Math.ceil(aufgaben.length / 2) + ', auto); column-gap: 40px; }' +
+        '.aufgabe { font-size: 18pt; padding: 9px 0; border-bottom: 1px dotted #bbb; white-space: nowrap; }' +
+        '.nr { display: inline-block; width: 1.6em; font-size: 12pt; color: #666; }' +
+        '.linie { display: inline-block; width: 2.4em; border-bottom: 1.5px solid #000; height: 0.9em; }' +
+        '.loesungen { page-break-before: always; break-before: page; }' +
+        '.loesungen .aufgabe { font-size: 14pt; padding: 5px 0; }' +
+        '</style></head><body>' +
+        '<div class="kopf">Mathe Klasse 2 – Rechnen bis 100</div>' +
+        '<h1>' + titel + '</h1><h2>' + untertitel + '</h2>' +
+        '<div class="name"><span>Name:</span><span class="datum">Datum:</span></div>' +
+        spalten(false) +
+        '<div class="loesungen"><div class="kopf">Mathe Klasse 2 – Rechnen bis 100</div>' +
+        '<h1>Lösungen</h1><h2>' + titel + ' – ' + untertitel + '</h2>' + spalten(true) + '</div>' +
+        '</body></html>';
+}
+
+/* Gedruckt wird aus einem unsichtbaren Rahmen statt aus einem neuen
+   Fenster - das blockiert kein Popup-Blocker. Die Schrift darf erst
+   fertig geladen sein, sonst druckt der Browser mit Ersatzschrift. */
+function abDrucken(index, sub) {
+    const station = STATIONS[index];
+    const untertitel = sub === -1 ? 'Gemischt' : station.subStations[sub].name;
+    const html = abDokumentHTML(stationTitel(index), untertitel, abAufgaben(index, sub));
+
+    const alt = document.getElementById('abRahmen');
+    if (alt) alt.remove();
+    const rahmen = document.createElement('iframe');
+    rahmen.id = 'abRahmen';
+    rahmen.className = 'ab-rahmen';
+    rahmen.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(rahmen);
+
+    const doc = rahmen.contentWindow.document;
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    let gedruckt = false;
+    const drucken = () => {
+        if (gedruckt) return;
+        gedruckt = true;
+        rahmen.contentWindow.focus();
+        rahmen.contentWindow.print();
+    };
+    // Ohne Netz kommt die Schrift nie - dann nach kurzer Zeit trotzdem
+    setTimeout(drucken, 1500);
+    try {
+        rahmen.contentWindow.document.fonts.ready.then(() => setTimeout(drucken, 100));
+    } catch (e) { /* dann eben nach der Wartezeit */ }
+}
+
+/* ============================================
    10. Stationen-Registrierung
    Neue Station = hier einen Eintrag ergänzen.
 
@@ -4216,6 +6300,164 @@ const STATIONS = [
         emoji: '🔟',
         color: 'modul17',
         newTask: stationNachbarzehner
+    },
+
+    /* ---- Rechnen bis 100: die Stufen bauen aufeinander auf ----
+       stufe ersetzt in Überschrift und Knöpfen die Stationsnummer.
+       erklaerung: die Erkläraufgabe, je Aufgabenart eine Variante.
+       arbeitsblatt: es gibt ein Blatt zum Ausdrucken.
+       typ: die Aufgabenart aus RN_TYPEN. */
+    {
+        name: 'Zehner und Einer',
+        title: 'Zehner und Einer',
+        stufe: 1,
+        emoji: '🧱',
+        color: 'modul18',
+        erklaerung: ERK_STUFE1,
+        subStations: [
+            { name: 'Einer dazu', emoji: '➕',
+              hinweis: 'Zum Beispiel: 40 + 6',
+              typ: 'zzPlusE',
+              newTask: () => rnAufgabe('zzPlusE') },
+            { name: 'Einer weg', emoji: '➖',
+              hinweis: 'Zum Beispiel: 46 − 6',
+              typ: 'zeMinusEZ',
+              newTask: () => rnAufgabe('zeMinusEZ') }
+        ]
+    },
+    {
+        name: 'Zehnerzahlen',
+        title: 'Zehnerzahlen',
+        stufe: 2,
+        emoji: '🔟',
+        color: 'modul19',
+        erklaerung: ERK_STUFE2,
+        subStations: [
+            { name: 'Plus', emoji: '➕',
+              hinweis: 'Zum Beispiel: 30 + 40',
+              typ: 'zzPlusZz',
+              newTask: () => rnAufgabe('zzPlusZz') },
+            { name: 'Minus', emoji: '➖',
+              hinweis: 'Zum Beispiel: 70 − 20',
+              typ: 'zzMinusZz',
+              newTask: () => rnAufgabe('zzMinusZz') }
+        ]
+    },
+    {
+        name: 'Zehner dazu und weg',
+        title: 'Zehner dazu und weg',
+        stufe: 3,
+        emoji: '🪜',
+        color: 'modul20',
+        erklaerung: ERK_STUFE3,
+        arbeitsblatt: true,
+        subStations: [
+            { name: 'Zehner dazu', emoji: '➕',
+              hinweis: 'Zum Beispiel: 45 + 30 oder 40 + 26',
+              typ: 'zehnerDazu',
+              newTask: () => rnAufgabe('zehnerDazu') },
+            { name: 'Zehner weg', emoji: '➖',
+              hinweis: 'Zum Beispiel: 65 − 20',
+              typ: 'zeMinusZz',
+              newTask: () => rnAufgabe('zeMinusZz') }
+        ]
+    },
+    {
+        name: 'Einer ohne Übergang',
+        title: 'Einer ohne Zehnerübergang',
+        stufe: 4,
+        emoji: '🧮',
+        color: 'modul21',
+        erklaerung: ERK_STUFE4,
+        arbeitsblatt: true,
+        subStations: [
+            { name: 'Einer dazu', emoji: '➕',
+              hinweis: 'Zum Beispiel: 34 + 5',
+              typ: 'zePlusE',
+              newTask: () => rnAufgabe('zePlusE') },
+            { name: 'Einer weg', emoji: '➖',
+              hinweis: 'Zum Beispiel: 38 − 5',
+              typ: 'zeMinusE',
+              newTask: () => rnAufgabe('zeMinusE') }
+        ]
+    },
+    {
+        name: 'Bis zum Zehner',
+        title: 'Bis zum Zehner / vom Zehner weg',
+        stufe: 5,
+        emoji: '🎯',
+        color: 'modul22',
+        erklaerung: ERK_STUFE5,
+        arbeitsblatt: true,
+        subStations: [
+            { name: 'Bis zum Zehner', emoji: '🎯',
+              hinweis: 'Zum Beispiel: 37 + 3',
+              typ: 'zeBisZehner',
+              newTask: () => rnAufgabe('zeBisZehner') },
+            { name: 'Ergänzen', emoji: '🔍',
+              hinweis: 'Zum Beispiel: 37 + _ = 40',
+              typ: 'ergaenzen',
+              newTask: () => rnAufgabe('ergaenzen') },
+            { name: 'Vom Zehner weg', emoji: '➖',
+              hinweis: 'Zum Beispiel: 40 − 6',
+              typ: 'zzMinusE',
+              newTask: () => rnAufgabe('zzMinusE') }
+        ]
+    },
+    {
+        name: 'Über den Zehner',
+        title: 'Einer mit Zehnerübergang',
+        stufe: 6,
+        emoji: '🌉',
+        color: 'modul23',
+        erklaerung: ERK_STUFE6,
+        subStations: [
+            { name: 'Plus über den Zehner', emoji: '➕',
+              hinweis: 'Zum Beispiel: 37 + 5',
+              typ: 'zePlusEUeber',
+              newTask: () => rnAufgabe('zePlusEUeber') },
+            { name: 'Minus über den Zehner', emoji: '➖',
+              hinweis: 'Zum Beispiel: 42 − 5',
+              typ: 'zeMinusEUeber',
+              newTask: () => rnAufgabe('zeMinusEUeber') }
+        ]
+    },
+
+    /* ---- Wiederholung Klasse 1 ----
+       zeit: die Runde dauert 3 statt 2 Minuten. weiterNach: nach einer
+       richtigen Antwort geht es schneller weiter. auswertung: am Ende
+       stehen Trefferquote und Spickzettel-Zählung. */
+    {
+        name: 'Kopfrechnen',
+        title: 'Kopfrechnen',
+        ohneNummer: true,
+        emoji: '🧠',
+        color: 'modul24',
+        zeit: 180,
+        weiterNach: 900,
+        auswertung: true,
+        subStations: [
+            { name: '1+1', emoji: '➕',
+              hinweis: 'ohne Zehnerübergang',
+              typ: 'krPlus',
+              newTask: () => rnAufgabe('krPlus') },
+            { name: '1−1', emoji: '➖',
+              hinweis: 'ohne Zehnerübergang',
+              typ: 'krMinus',
+              newTask: () => rnAufgabe('krMinus') },
+            { name: '1+1 mit Zehnerübergang', emoji: '➕',
+              hinweis: 'über die 10 hinaus',
+              typ: 'krPlusZue',
+              newTask: () => rnAufgabe('krPlusZue') },
+            { name: '1−1 mit Zehnerübergang', emoji: '➖',
+              hinweis: 'unter die 10 zurück',
+              typ: 'krMinusZue',
+              newTask: () => rnAufgabe('krMinusZue') },
+            { name: 'Gemischt', emoji: '🔀',
+              hinweis: 'alle vier durcheinander',
+              typ: 'krGemischt',
+              newTask: () => rnAufgabe('krGemischt') }
+        ]
     }
 ];
 
@@ -4256,7 +6498,50 @@ const BEREICHE = [
         color: 'modul9',
         hinweis: 'Zahlen auf dem Zahlenstrahl ablesen, einordnen und der Größe nach vergleichen.',
         stationen: [11, 12, 13, 14, 15, 16]
+    },
+    {
+        name: 'Rechnen bis 100',
+        emoji: '🧮',
+        color: 'modul21',
+        hinweis: 'Plus und Minus in sechs Stufen – von 40 + 6 bis 37 + 5.',
+        stationen: [17, 18, 19, 20, 21, 22]
+    },
+    {
+        name: 'Wiederholung Klasse 1',
+        emoji: '🧠',
+        color: 'modul24',
+        hinweis: 'Kopfrechnen im Zahlenraum bis 20 – das kleine Einspluseins.',
+        stationen: [23]
     }
+];
+
+/* ============================================
+   12. Das Menü auf dem Startbildschirm
+   Ein Eintrag ist ein Bereich ({ bereich: Index in BEREICHE }) oder
+   eine Gruppe mit eigenem Namen und inhalt - darin wieder Bereiche
+   oder Gruppen. Ein Bereich zeigt auf seiner Kachel Name, Bild und
+   Hinweis aus BEREICHE.
+   ============================================ */
+const MENUE = [
+    { bereich: 5 },
+    {
+        name: 'Zahlenraum bis 100',
+        emoji: '🗺️',
+        color: 'modul7',
+        hinweis: 'Zahlen bis 100 kennenlernen – Stellenwerte, Hunderterfeld und Zahlenstrahl.',
+        inhalt: [
+            {
+                name: 'Stellenwerte',
+                emoji: '🔢',
+                color: 'modul2',
+                hinweis: 'Zehnerzahlen, Zehner und Einer – finden, hören, bauen und zerlegen.',
+                inhalt: [{ bereich: 0 }, { bereich: 1 }]
+            },
+            { bereich: 2 },
+            { bereich: 3 }
+        ]
+    },
+    { bereich: 4 }
 ];
 
 document.addEventListener('DOMContentLoaded', buildStationUI);

@@ -70,6 +70,24 @@
     --color-modul17: #303F9F;
     --color-modul17-light: #9FA8DA;
 
+    /* Rechnen bis 100: eine Farbe je Stufe */
+    --color-modul18: #2E7D32;
+    --color-modul18-light: #81C784;
+    --color-modul19: #0277BD;
+    --color-modul19-light: #4FC3F7;
+    --color-modul20: #6A1B9A;
+    --color-modul20-light: #BA68C8;
+    --color-modul21: #EF6C00;
+    --color-modul21-light: #FFB74D;
+    --color-modul22: #AD1457;
+    --color-modul22-light: #F06292;
+    --color-modul23: #00838F;
+    --color-modul23-light: #4DD0E1;
+
+    /* Wiederholung Klasse 1: Kopfrechnen */
+    --color-modul24: #558B2F;
+    --color-modul24-light: #9CCC65;
+
     --color-text: #333;
     --color-bg: #f5f5f5;
     --color-white: #ffffff;
@@ -2600,4 +2618,481 @@ body {
     .ht-ausschnitt { --ht-zelle: 52px; gap: 4px; }
     .ht-karte { width: 52px; min-height: 46px; font-size: 1.1rem; }
     .hf-taste { min-width: 62px; padding: 11px 10px; font-size: 1.2rem; }
+}
+
+/* ============================================
+   Rechnen bis 100
+   ============================================ */
+/* Farben der sechs Stufen - gleiches Muster wie bei den Modulen oben */
+.operation-btn.modul18 { background: linear-gradient(135deg, var(--color-modul18) 0%, var(--color-modul18-light) 100%); }
+.modul18-color { color: var(--color-modul18); }
+.check-btn.modul18-color, .next-btn.modul18-color { background: var(--color-modul18); }
+#stationOptions.modul18-opts .option-btn { background-color: var(--color-modul18-light); box-shadow: 0 5px 0 var(--color-modul18); }
+#stationOptions.modul18-opts .option-btn:active:not(:disabled) { box-shadow: 0 0 0 var(--color-modul18); }
+.operation-btn.modul19 { background: linear-gradient(135deg, var(--color-modul19) 0%, var(--color-modul19-light) 100%); }
+.modul19-color { color: var(--color-modul19); }
+.check-btn.modul19-color, .next-btn.modul19-color { background: var(--color-modul19); }
+#stationOptions.modul19-opts .option-btn { background-color: var(--color-modul19-light); box-shadow: 0 5px 0 var(--color-modul19); }
+#stationOptions.modul19-opts .option-btn:active:not(:disabled) { box-shadow: 0 0 0 var(--color-modul19); }
+.operation-btn.modul20 { background: linear-gradient(135deg, var(--color-modul20) 0%, var(--color-modul20-light) 100%); }
+.modul20-color { color: var(--color-modul20); }
+.check-btn.modul20-color, .next-btn.modul20-color { background: var(--color-modul20); }
+#stationOptions.modul20-opts .option-btn { background-color: var(--color-modul20-light); box-shadow: 0 5px 0 var(--color-modul20); }
+#stationOptions.modul20-opts .option-btn:active:not(:disabled) { box-shadow: 0 0 0 var(--color-modul20); }
+.operation-btn.modul21 { background: linear-gradient(135deg, var(--color-modul21) 0%, var(--color-modul21-light) 100%); }
+.modul21-color { color: var(--color-modul21); }
+.check-btn.modul21-color, .next-btn.modul21-color { background: var(--color-modul21); }
+#stationOptions.modul21-opts .option-btn { background-color: var(--color-modul21-light); box-shadow: 0 5px 0 var(--color-modul21); }
+#stationOptions.modul21-opts .option-btn:active:not(:disabled) { box-shadow: 0 0 0 var(--color-modul21); }
+.operation-btn.modul22 { background: linear-gradient(135deg, var(--color-modul22) 0%, var(--color-modul22-light) 100%); }
+.modul22-color { color: var(--color-modul22); }
+.check-btn.modul22-color, .next-btn.modul22-color { background: var(--color-modul22); }
+#stationOptions.modul22-opts .option-btn { background-color: var(--color-modul22-light); box-shadow: 0 5px 0 var(--color-modul22); }
+#stationOptions.modul22-opts .option-btn:active:not(:disabled) { box-shadow: 0 0 0 var(--color-modul22); }
+.operation-btn.modul23 { background: linear-gradient(135deg, var(--color-modul23) 0%, var(--color-modul23-light) 100%); }
+.modul23-color { color: var(--color-modul23); }
+.check-btn.modul23-color, .next-btn.modul23-color { background: var(--color-modul23); }
+#stationOptions.modul23-opts .option-btn { background-color: var(--color-modul23-light); box-shadow: 0 5px 0 var(--color-modul23); }
+#stationOptions.modul23-opts .option-btn:active:not(:disabled) { box-shadow: 0 0 0 var(--color-modul23); }
+
+.rn-bereich {
+    --karte-farbe: var(--rn-farbe);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.rn-bereich .hilfe-bereich { margin-top: 0; width: 100%; }
+
+.rn-aufgabe { gap: 14px; }
+.rn-platz { display: inline-flex; border-radius: 10px; }
+.rn-ziffer { display: inline-block; padding: 0 0.04em; border-radius: 8px; }
+.rn-zeichen { color: #546E7A; }
+.zahl-karte.rn-eingabe { min-width: 110px; height: 80px; font-size: 2.6rem; }
+
+/* Der Coach lässt markieren: die Ziffern laden zum Antippen ein */
+.rn-aufgabe.markieren .rn-platz { cursor: pointer; box-shadow: inset 0 -5px 0 rgba(255, 152, 0, 0.3); }
+.rn-aufgabe.markieren .rn-platz:hover { background: #FFF3E0; }
+
+/* Markierung des Lerncoachs und der Erkläraufgabe: gelb wie ein Textmarker */
+.rn-mark {
+    background: #FFF176;
+    color: #5D4037 !important;
+    box-shadow: 0 0 0 4px rgba(255, 193, 7, 0.3);
+    border-radius: 10px;
+}
+
+@keyframes rn-wackeln {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-6px); }
+    75% { transform: translateX(6px); }
+}
+.rn-wackeln { animation: rn-wackeln 0.45s ease; background: #FFCDD2; border-radius: 10px; }
+
+.rn-tastenfeld { margin-top: 18px; }
+
+/* ---------- Farbliche Unterstützung ----------
+   Hunderter rot, Zehner blau, Einer grün. Die Farben gehen vor - auch
+   vor der Markierung des Coachs und vor dem Grün einer gelösten Lücke,
+   sonst verlöre eine markierte Einerziffer gerade ihr Einer-Grün. */
+.rn-farbig .rn-ziffer[data-stelle="hunderter"] { color: #C62828 !important; }
+.rn-farbig .rn-ziffer[data-stelle="zehner"]    { color: #1565C0 !important; }
+.rn-farbig .rn-ziffer[data-stelle="einer"]     { color: #2E7D32 !important; }
+/* Zahlen, die Zehner zählen (3 + 4 = 7 bei 30 + 40), sind ganz blau */
+.rn-farbig .rn-zehnerzeile .rn-ziffer[data-stelle] { color: #1565C0 !important; }
+/* Die gerade nicht gemeinte Zeile der Erkläraufgabe tritt zurück */
+.rn-farbig .erk-zeile-still .rn-ziffer { opacity: 0.45; }
+
+/* ---------- Kleine Aufgabe (Stufe 2) ---------- */
+.rn-analogie.sichtbar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--color-text);
+}
+.rn-analogie-klein { color: var(--rn-farbe); }
+.rn-analogie-pfeil { color: #90A4AE; }
+
+/* ---------- Material ---------- */
+.rn-material {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 18px;
+    padding: 6px;
+}
+.rn-bild { display: flex; align-items: flex-end; gap: 12px; }
+.rn-material .zs-reihe { min-height: 0; padding: 0; gap: 6px; flex-wrap: nowrap; }
+.rn-material .zs-nach-luecke { margin-left: 16px; }
+.rn-material-zeichen { font-size: 2rem; font-weight: 700; color: #546E7A; align-self: center; }
+
+/* Die Würfel so groß wie ein Feld der Stange */
+.rn-material .einer-block { gap: 6px; }
+.rn-material .einer-spalte { gap: 3px; }
+.rn-material .einer-wuerfel { width: 26px; height: 15px; position: relative; }
+.einer-wuerfel.einer-a { background: #1E88E5; border-color: #1565C0; }
+.einer-wuerfel.einer-b { background: #FB8C00; border-color: #E65100; }
+.einer-wuerfel.einer-gruen { background: #43A047; border-color: #2E7D32; }
+/* Leere Plätze bis zum vollen Zehner (Ergänzen) */
+.einer-wuerfel.einer-leer { background: transparent; border: 2px dashed #90A4AE; }
+
+/* Weggenommen: Würfel und einzelne Felder sind grau und durchgestrichen.
+   Grau statt durchscheinend - sonst verblasst der Strich mit. */
+.einer-wuerfel.einer-weg { background: #CFD8DC; border-color: #78909C; }
+.zehnerstange .zs-feld.feld-weg { position: relative; background: #CFD8DC; }
+.einer-wuerfel.einer-weg::after,
+.zehnerstange .zs-feld.feld-weg::after {
+    content: '';
+    position: absolute;
+    left: -3px;
+    right: -3px;
+    top: calc(50% - 1.5px);
+    height: 3px;
+    background: #263238;
+    border-radius: 2px;
+    transform: rotate(-28deg);
+}
+
+/* ---------- Rechenstrich ---------- */
+.rn-strich { width: 100%; max-width: 480px; margin: 8px auto 0; }
+.rn-strich svg { display: block; width: 100%; height: auto; overflow: visible; }
+.rn-strich-linie { stroke: #546E7A; stroke-width: 3; stroke-linecap: round; }
+.rn-strich-marke { stroke: #546E7A; stroke-width: 3; stroke-linecap: round; }
+.rn-strich-bogen { fill: none; stroke: var(--rn-farbe, #EF6C00); stroke-width: 3.5; stroke-linecap: round; }
+.rn-strich-bogen.offen { stroke-dasharray: 7 6; opacity: 0.7; }
+.rn-strich-spitze { fill: var(--rn-farbe, #EF6C00); }
+.rn-strich text {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    text-anchor: middle;
+}
+.rn-strich-zahl { font-size: 22px; fill: var(--color-text); }
+.rn-strich-text { font-size: 22px; fill: var(--rn-farbe, #EF6C00); }
+.rn-strich text.offen { fill: #90A4AE; }
+
+/* ---------- Lerncoach ---------- */
+.rn-coach {
+    width: 100%;
+    max-width: 560px;
+    margin-top: 16px;
+    padding: 14px 16px;
+    background: #E0F2F1;
+    border-left: 5px solid #00897B;
+    border-radius: 15px;
+    text-align: left;
+}
+.rn-coach-kopf { display: flex; gap: 12px; align-items: flex-start; }
+.rn-coach-avatar {
+    flex: 0 0 42px;
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: #fff;
+    font-size: 1.6rem;
+}
+.rn-coach-text { margin: 0; min-height: 44px; font-size: 1.15rem; line-height: 1.45; color: #174C47; }
+.rn-coach-knoepfe { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 12px; }
+
+/* Rechenweg im Coach: Kästchen zum Eintragen */
+.rn-weg {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--color-text);
+}
+.rn-weg-kasten {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 54px;
+    height: 50px;
+    padding: 0 6px;
+    background: #fff;
+    border: 3px dashed #90A4AE;
+    border-radius: 10px;
+}
+.rn-weg-kasten.aktiv { border-style: solid; border-color: var(--rn-farbe); box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.06); }
+.rn-weg-kasten.gefuellt { border-style: solid; border-color: #2E7D32; background: #C8E6C9; color: #1B5E20; }
+.rn-weg-luecke { display: inline-block; width: 44px; border-bottom: 3px solid #90A4AE; height: 1.1em; }
+
+/* Knöpfe von Coach und Erkläraufgabe */
+.coach-weiter-btn, .coach-zurueck-btn {
+    border: 0;
+    border-radius: 10px;
+    padding: 10px 18px;
+    font-family: inherit;
+    font-size: 1.05rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+.coach-weiter-btn { background: var(--rn-farbe, #EF6C00); color: #fff; }
+.coach-weiter-btn.is-secondary { background: #ECEFF1; color: #455A64; }
+.coach-zurueck-btn { background: #ECEFF1; color: #455A64; }
+.coach-zurueck-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.rn-vorlesen {
+    border: 0;
+    background: #fff;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 1.2rem;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    flex: 0 0 auto;
+}
+
+/* ---------- Erkläraufgabe ---------- */
+.erk-einstieg { margin: 0 0 6px; flex-wrap: wrap; }
+
+/* Arbeitsblatt: Auswahl der Aufgabenart und der unsichtbare Druckrahmen */
+.ab-auswahl {
+    max-width: 640px;
+    margin: 0 auto 16px;
+    padding: 14px 16px;
+    background: #F5F7F8;
+    border-radius: 14px;
+    text-align: center;
+}
+.ab-auswahl p { margin: 0 0 10px; font-weight: 600; color: #455A64; }
+.ab-rahmen { position: fixed; width: 0; height: 0; border: 0; left: -10px; top: -10px; }
+.erk-content { max-width: 760px; }
+.erk-kopf {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+}
+.erk-kicker { font-weight: 800; color: var(--rn-farbe); text-transform: uppercase; letter-spacing: 0.05em; }
+.erk-fortschritt {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 18px 0 12px;
+    color: var(--rn-farbe);
+    font-weight: 800;
+}
+.erk-linie { flex: 1; height: 8px; border-radius: 99px; background: #ECEFF1; overflow: hidden; }
+.erk-linie i { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--rn-farbe); transition: width 0.25s ease; }
+
+.erk-bild {
+    position: relative;
+    overflow: hidden;
+    padding: 18px;
+    border-radius: 15px;
+    background: #F5F7F8;
+    text-align: center;
+}
+.erk-bild:empty { display: none; }
+.erk-gleichung {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    padding: 6px 16px;
+    border-radius: 16px;
+    font-size: clamp(2rem, 6vw, 3.4rem);
+    font-weight: 700;
+    color: #263238;
+}
+.erk-gleichung + .erk-gleichung { margin-top: 8px; }
+/* Stehen zwei Aufgaben da, bekommt die gerade zu rechnende einen Rahmen */
+.erk-zeile-aktiv { background: #fff; box-shadow: 0 0 0 3px var(--rn-farbe); }
+.erk-zeile-still { color: #B0BEC5; }
+.erk-zeichen { color: #78909C; }
+.erk-platz { display: inline-flex; min-width: 0.7em; justify-content: center; border-radius: 12px; padding: 0 0.08em; }
+.erk-offen { color: var(--rn-farbe); }
+.erk-gefunden { color: #2E7D32; }
+.erk-luecke { display: inline-block; width: 1.1em; border-bottom: 4px solid #B0BEC5; height: 0.9em; }
+.erk-tippbar { cursor: pointer; box-shadow: inset 0 -5px 0 rgba(255, 152, 0, 0.3); }
+.erk-tippbar:hover { background: #FFF3E0; }
+
+.erk-ansage {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 2.4em;
+    margin-top: 12px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.4;
+    color: #37474F;
+}
+.erk-ansage-intro { font-weight: 600; color: #546E7A; }
+.erk-ansage-ergebnis { font-size: 1.4rem; color: var(--rn-farbe); }
+.erk-haken {
+    display: inline-grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    margin-right: 8px;
+    border-radius: 50%;
+    background: #66BB6A;
+    color: #fff;
+    font-size: 1rem;
+    vertical-align: middle;
+}
+.erk-merksatz { display: block; margin-top: 12px; font-size: 0.98rem; color: #607D8B; }
+.erk-bild .rn-material { margin-top: 10px; }
+
+@keyframes erk-daumen {
+    0% { opacity: 0; transform: translateY(10px) scale(0.6); }
+    25% { opacity: 1; transform: translateY(0) scale(1.1); }
+    80% { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-8px); }
+}
+.erk-daumen {
+    position: absolute;
+    top: 10px;
+    right: 16px;
+    font-size: 2.6rem;
+    pointer-events: none;
+    animation: erk-daumen 1.4s ease-out forwards;
+}
+
+.erk-auswahl { margin-top: 14px; }
+.erk-auswahl:empty { display: none; }
+.erk-wahl { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.erk-wahl-btn {
+    border: 0;
+    border-radius: 12px;
+    padding: 14px 28px;
+    background: #FFE0B2;
+    color: #5D4037;
+    box-shadow: 0 5px 0 #FFB74D;
+    font-family: inherit;
+    font-size: 1.6rem;
+    font-weight: 800;
+    cursor: pointer;
+}
+.erk-wahl-btn:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 2px 0 #FFB74D; }
+.erk-wahl-btn:disabled { background: #EF9A9A; box-shadow: 0 5px 0 #C62828; color: #fff; cursor: not-allowed; }
+.erk-wahl-btn.erk-variante { padding: 20px 34px; font-size: 1.9rem; }
+.erk-tipp { margin: 12px 0 0; min-height: 1.4em; text-align: center; color: #78909C; font-weight: 700; }
+.erk-tipp.falsch { color: #C62828; }
+
+.erk-liste { display: grid; gap: 10px; margin-top: 18px; }
+.erk-schritt {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    padding: 12px 15px;
+    border-radius: 13px;
+    background: #EEF4EE;
+    opacity: 0.75;
+}
+.erk-schritt span {
+    flex: 0 0 30px;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #A5D6A7;
+    color: #1B5E20;
+    font-weight: 800;
+}
+.erk-schritt p { margin: 0; flex: 1; text-align: left; font-size: 1.1rem; }
+.erk-schritt.aktuell { opacity: 1; outline: 3px solid #A5D6A7; background: #E8F5E9; }
+.erk-knoepfe { display: flex; justify-content: space-between; gap: 12px; margin-top: 18px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .rn-wackeln, .erk-daumen { animation: none; }
+}
+
+@media (max-width: 600px) {
+    .rn-aufgabe { gap: 8px; }
+    .zahl-karte.rn-eingabe { min-width: 84px; height: 64px; font-size: 2rem; }
+    .rn-material .zehnerstange { width: 18px; }
+    .rn-material .zehnerstange .zs-feld { height: 11px; }
+    .rn-material .einer-wuerfel { width: 18px; height: 11px; }
+    .rn-material .zs-reihe { gap: 4px; }
+    .rn-weg { font-size: 1.4rem; gap: 6px; }
+    .rn-weg-kasten { min-width: 44px; height: 42px; }
+    .erk-wahl-btn { padding: 12px 20px; font-size: 1.35rem; }
+    .erk-gleichung { gap: 8px; padding: 6px 8px; }
+}
+
+/* ============================================
+   Kopfrechnen (Wiederholung Klasse 1)
+   ============================================ */
+.operation-btn.modul24 { background: linear-gradient(135deg, var(--color-modul24) 0%, var(--color-modul24-light) 100%); }
+.modul24-color { color: var(--color-modul24); }
+.check-btn.modul24-color, .next-btn.modul24-color { background: var(--color-modul24); }
+#stationOptions.modul24-opts .option-btn { background-color: var(--color-modul24-light); box-shadow: 0 5px 0 var(--color-modul24); }
+#stationOptions.modul24-opts .option-btn:active:not(:disabled) { box-shadow: 0 0 0 var(--color-modul24); }
+
+/* Spickzettel über der Aufgabe */
+.spick-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.5);
+}
+/* schlüge sonst das hidden-Attribut */
+.spick-overlay[hidden] { display: none; }
+.spick-karte {
+    width: 100%;
+    max-width: 800px;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 30px;
+    background: #fff;
+    border-radius: 20px;
+    text-align: left;
+}
+.spick-karte h2 { margin-top: 0; color: var(--spick-farbe, var(--color-modul24)); }
+.check-btn.spick-schliessen { width: 100%; margin-top: 20px; background: var(--spick-farbe, var(--color-modul24)); }
+.kr-spick-reihe { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; }
+.kr-spick-label {
+    min-width: 80px;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--spick-farbe, var(--color-modul24));
+    white-space: nowrap;
+}
+.kr-spick-zellen { display: flex; flex-wrap: wrap; gap: 8px; }
+.kr-spick-zelle {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    white-space: nowrap;
+}
+
+/* Auswertung am Ende der Runde */
+.kr-auswertung {
+    max-width: 480px;
+    margin: 0 auto 20px;
+    padding: 20px;
+    background: #F1F8E9;
+    border-radius: 16px;
+}
+.kr-lob { margin: 0 0 8px; font-size: 1.4rem; font-weight: 700; color: var(--color-modul24); }
+.kr-quote { margin: 0; font-size: 1.3rem; }
+.kr-quote strong { font-size: 1.8rem; }
+.kr-details { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; font-size: 1.1rem; color: #555; }
+.kr-sterne { margin-top: 14px; font-size: 2.2rem; letter-spacing: 5px; }
+
+@media (max-width: 600px) {
+    .spick-karte { padding: 20px; }
+    .kr-spick-reihe { flex-direction: column; align-items: flex-start; gap: 6px; }
 }
