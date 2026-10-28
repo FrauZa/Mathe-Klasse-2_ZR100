@@ -261,6 +261,7 @@ function updateStationTimerDisplay() {
    ============================================ */
 /* Einstieg aus dem Hauptmenü und aus den Tabs */
 function openStation(index) {
+    if (!stationOffen(index)) return;
     aktiverBereich = bereichVon(index);
     if (STATIONS[index].subStations) showSubStationScreen(index);
     else showModeScreen(index, 0);
@@ -345,17 +346,21 @@ function buildStationUI() {
     earnedStars = STATIONS.map(() => false);
 }
 
+/* Zu sehen, aber noch nicht zu öffnen: das Thema war noch nicht dran.
+   Gilt für Gruppen, Bereiche und einzelne Stationen. sperrHinweis
+   ersetzt den Standardtext, etwa wenn das Thema schon vorbei ist. */
+function gesperrtKachelHTML(name, color, sperrHinweis) {
+    return '<button class="operation-btn ' + color + ' bereich-zu" disabled>' +
+           '<span class="emoji">🔒</span>' +
+           '<span class="text">' + name + '</span>' +
+           '<span class="hinweis">' + (sperrHinweis || 'Das hatten wir noch nicht – kommt später.') + '</span>' +
+           '</button>';
+}
+
 /* Kachel eines Bereichs - auf dem Startbildschirm oder in einer Gruppe */
 function bereichKachelHTML(i) {
     const bereich = BEREICHE[i];
-    if (bereich.gesperrt) {
-        // Zu sehen, aber noch nicht zu öffnen: das Thema war noch nicht dran
-        return '<button class="operation-btn ' + bereich.color + ' bereich-zu" disabled>' +
-               '<span class="emoji">🔒</span>' +
-               '<span class="text">' + bereich.name + '</span>' +
-               '<span class="hinweis">Das hatten wir noch nicht – kommt später.</span>' +
-               '</button>';
-    }
+    if (bereich.gesperrt) return gesperrtKachelHTML(bereich.name, bereich.color);
     return '<button class="operation-btn ' + bereich.color + '" onclick="showBereich(' + i + ')">' +
            '<span class="emoji">' + bereich.emoji + '</span>' +
            '<span class="text">' + bereich.name + '</span>' +
@@ -368,6 +373,7 @@ function bereichKachelHTML(i) {
    des Startbildschirms, "0.0" die erste Gruppe darin. */
 function menueKachelHTML(eintrag, pfad) {
     if (eintrag.bereich !== undefined) return bereichKachelHTML(eintrag.bereich);
+    if (eintrag.gesperrt) return gesperrtKachelHTML(eintrag.name, eintrag.color, eintrag.sperrHinweis);
     return '<button class="operation-btn ' + eintrag.color + '" onclick="showGruppe(\'' + pfad + '\')">' +
            '<span class="emoji">' + eintrag.emoji + '</span>' +
            '<span class="text">' + eintrag.name + '</span>' +
@@ -452,11 +458,19 @@ function bereichVon(stationIndex) {
    Auswertung mit - sonst wäre die App nie zu schaffen. */
 function bereichGesperrt(bereichIndex) {
     const bereich = BEREICHE[bereichIndex];
-    return !!(bereich && bereich.gesperrt);
+    return !!(bereich && bereich.gesperrt) || gruppeGesperrt(bereichIndex);
+}
+
+/* Steht der Bereich in einer gesperrten Gruppe - auch weiter oben? */
+function gruppeGesperrt(bereichIndex) {
+    const pfad = pfadVonBereich(bereichIndex);
+    if (!pfad) return false;
+    const teile = pfad.split('.');
+    return teile.some((t, i) => gruppeNachPfad(teile.slice(0, i + 1).join('.')).gesperrt);
 }
 
 function stationOffen(index) {
-    return !bereichGesperrt(bereichVon(index));
+    return !STATIONS[index].gesperrt && !bereichGesperrt(bereichVon(index));
 }
 
 function offeneStationen() {
@@ -483,6 +497,10 @@ function showBereich(bereichIndex) {
     grid.innerHTML = '';
     bereich.stationen.forEach(index => {
         const station = STATIONS[index];
+        if (station.gesperrt) {
+            grid.innerHTML += gesperrtKachelHTML(stationKurz(index), station.color, station.sperrHinweis);
+            return;
+        }
         grid.innerHTML +=
             '<button class="operation-btn ' + station.color + '" onclick="openStation(' + index + ')">' +
             '<span class="emoji">' + station.emoji + '</span>' +
@@ -502,7 +520,7 @@ function backToBereich() {
 function buildStationTabs(bereichIndex) {
     const tabs = document.getElementById('stationTabs');
     tabs.innerHTML = '';
-    BEREICHE[bereichIndex].stationen.forEach(index => {
+    BEREICHE[bereichIndex].stationen.filter(stationOffen).forEach(index => {
         tabs.innerHTML +=
             '<div class="tab" id="stationTab' + index + '" onclick="openStation(' + index + ')" ' +
             'style="cursor: pointer;">' + stationKurz(index) + '</div>';
@@ -764,7 +782,7 @@ function startDurchlauf() {
     if (bereichGesperrt(bereich)) return;
 
     const liste = [];
-    BEREICHE[bereich].stationen.forEach(index => {
+    BEREICHE[bereich].stationen.filter(stationOffen).forEach(index => {
         const subs = STATIONS[index].subStations;
         const anzahl = subs ? subs.length : 1;
         for (let sub = 0; sub < anzahl; sub++) liste.push({ station: index, sub: sub });
@@ -6311,6 +6329,8 @@ const STATIONS = [
         name: 'Zehner und Einer',
         title: 'Zehner und Einer',
         stufe: 1,
+        gesperrt: true,
+        sperrHinweis: 'Das hatten wir schon. Jetzt üben wir etwas anderes.',
         emoji: '🧱',
         color: 'modul18',
         erklaerung: ERK_STUFE1,
@@ -6408,6 +6428,7 @@ const STATIONS = [
         name: 'Über den Zehner',
         title: 'Einer mit Zehnerübergang',
         stufe: 6,
+        gesperrt: true,
         emoji: '🌉',
         color: 'modul23',
         erklaerung: ERK_STUFE6,
@@ -6468,7 +6489,9 @@ const STATIONS = [
 
    gesperrt: true heißt, der Bereich steht schon im Menü, lässt sich
    aber noch nicht öffnen - das Thema war im Unterricht noch nicht
-   dran. Freischalten = diese Zeile entfernen.
+   dran. Freischalten = diese Zeile entfernen. Dasselbe geht auch für
+   eine Gruppe im MENUE (sperrt alles darin) und für eine einzelne
+   Station in STATIONS.
    ============================================ */
 const BEREICHE = [
     {
@@ -6526,6 +6549,8 @@ const MENUE = [
     { bereich: 5 },
     {
         name: 'Zahlenraum bis 100',
+        gesperrt: true,
+        sperrHinweis: 'Das hatten wir schon. Jetzt üben wir etwas anderes.',
         emoji: '🗺️',
         color: 'modul7',
         hinweis: 'Zahlen bis 100 kennenlernen – Stellenwerte, Hunderterfeld und Zahlenstrahl.',
